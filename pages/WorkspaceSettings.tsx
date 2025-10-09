@@ -29,6 +29,7 @@ import {
     AuthState,
 } from '../types';
 import * as apiService from '../services/apiService';
+import { useBillingActions } from '../hooks/useBillingActions';
 
 const AVAILABLE_SCOPES: Array<{ label: string; value: ApiScope; description: string }> = [
     { label: 'Chat: write', value: 'chat:write', description: 'Generate content and consume tokens.' },
@@ -96,7 +97,6 @@ const WorkspaceSettings: React.FC = () => {
     const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
     const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
-    const [billingActionLoading, setBillingActionLoading] = useState(false);
 
     const [auditExportSince, setAuditExportSince] = useState('');
     const [isExportingAudit, setIsExportingAudit] = useState(false);
@@ -127,6 +127,27 @@ const WorkspaceSettings: React.FC = () => {
         },
         [],
     );
+
+    const refreshUsageWithFallback = useCallback(
+        async (organizationId?: string) => {
+            const targetOrganizationId = organizationId ?? selectedOrganization?.organization.id;
+            if (targetOrganizationId) {
+                await refreshUsage(targetOrganizationId);
+            }
+        },
+        [refreshUsage, selectedOrganization?.organization.id],
+    );
+
+    const {
+        isLoading: billingActionLoading,
+        startTrial,
+        upgradePlan,
+        openPortal,
+    } = useBillingActions({
+        authState: workspaceAuthState,
+        activeOrganizationId: selectedOrganization?.organization.id ?? null,
+        refreshUsage: refreshUsageWithFallback,
+    });
 
     const loadOrganizationDetail = useCallback(
         async (organizationId: string) => {
@@ -559,59 +580,62 @@ const WorkspaceSettings: React.FC = () => {
 
     const handleStartTrial = async (planId: string) => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            await apiService.startTrial(planId, selectedOrganization.organization.id);
-            await refreshUsage(selectedOrganization.organization.id);
-            setNotification({ type: 'success', message: 'Trial started for this workspace.' });
-        } catch (err) {
-            console.error(err);
+        const result = await startTrial(planId, { organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            console.error(result.message);
             setError('Unable to start a trial.');
-        } finally {
-            setBillingActionLoading(false);
+            return;
+        }
+        if (result.status === 'success') {
+            setNotification({ type: 'success', message: 'Trial started for this workspace.' });
         }
     };
 
     const handleUpgrade = async (planId: string, cadence: 'monthly' | 'yearly') => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            const session = await apiService.createCheckoutSession(
-                planId,
-                cadence,
-                selectedOrganization.organization.id,
-            );
-            if (session?.checkoutUrl) {
-                window.open(session.checkoutUrl, '_blank', 'noopener');
+        const result = await upgradePlan(planId, cadence, { organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            console.error(result.message);
+            setError('Unable to start checkout.');
+            return;
+        }
+        if (result.status === 'success') {
+            const checkoutUrl = result.data?.checkoutUrl;
+            if (checkoutUrl) {
+                window.open(checkoutUrl, '_blank', 'noopener');
                 setNotification({ type: 'info', message: 'Checkout opened in a new tab.' });
             }
-        } catch (err) {
-            console.error(err);
-            setError('Unable to start checkout.');
-        } finally {
-            setBillingActionLoading(false);
         }
     };
 
     const handleOpenPortal = async () => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            const portal = await apiService.openBillingPortal(selectedOrganization.organization.id);
-            if (portal?.url) {
-                window.open(portal.url, '_blank', 'noopener');
-            }
-        } catch (err) {
-            console.error(err);
+        const result = await openPortal({ organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            console.error(result.message);
             setError('Unable to open billing portal.');
-        } finally {
-            setBillingActionLoading(false);
+            return;
+        }
+        if (result.status === 'success') {
+            const portalUrl = result.data?.url;
+            if (portalUrl) {
+                window.open(portalUrl, '_blank', 'noopener');
+            }
         }
     };
 
