@@ -1,4 +1,15 @@
-import { AuthState, ChatMessage, IntegrationName, ProfileSource, StyleProfile } from '../types';
+import {
+    AuthState,
+    ChatMessage,
+    IntegrationName,
+    ProfileSource,
+    StyleProfile,
+    Subscription,
+    SubscriptionPlan,
+    IntegrationSummary,
+    UsageRecord,
+    SubscriptionTier,
+} from '../types';
 
 class ApiError extends Error {
     status: number;
@@ -98,9 +109,10 @@ export interface ContinueConversationPayload {
     context: {
         activeProfileId?: string | null;
     };
+    provider?: string;
 }
 
-export const continueConversation = async (payload: ContinueConversationPayload): Promise<ChatMessage> => {
+export const continueConversation = async (payload: ContinueConversationPayload & { provider?: string }): Promise<ChatMessage> => {
     return apiRequest('/api/chat/continue', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -108,13 +120,46 @@ export const continueConversation = async (payload: ContinueConversationPayload)
 };
 
 export const getSampleCount = async (source: 'gmail' | 'facebook'): Promise<{ source: string, count: number }> => {
-    return apiRequest(`/api/sample-count?source=${source}`);
+    return apiRequest(`/api/chat/sample-count?source=${source}`);
 };
 
+export const getBillingPlans = async (): Promise<SubscriptionPlan[]> => {
+    return apiRequest('/api/billing/plans');
+};
+
+export const getSubscription = async (): Promise<{ subscription: Subscription | null }> => {
+    return apiRequest('/api/billing/subscription');
+};
+
+export const updateSubscription = async (planId: SubscriptionTier): Promise<{ subscription: Subscription }> => {
+    return apiRequest('/api/billing/subscription', {
+        method: 'POST',
+        body: JSON.stringify({ planId }),
+    });
+};
+
+export const getUsage = async (): Promise<{ usage: UsageRecord; subscription: Subscription | null; withinAllowance: boolean }> => {
+    return apiRequest('/api/billing/usage');
+};
+
+export const getIntegrations = async (): Promise<{ integrations: IntegrationSummary[] }> => {
+    return apiRequest('/api/integrations');
+};
+
+export const connectIntegration = async (integration: IntegrationName): Promise<{ message: string }> => {
+    return apiRequest('/api/integrations/connect', {
+        method: 'POST',
+        body: JSON.stringify({ integration }),
+    });
+};
 
 export const disconnectIntegration = async (integration: IntegrationName): Promise<{ message: string }> => {
     return apiRequest('/api/integrations/disconnect', {
         method: 'POST',
         body: JSON.stringify({ integration }),
     });
+};
+
+export const getWebhookSecret = async (): Promise<{ secret: string }> => {
+    return apiRequest('/api/integrations/webhook-secret');
 };

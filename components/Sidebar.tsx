@@ -1,6 +1,6 @@
 import React from 'react';
 // FIX: Added IntegrationName to import.
-import { AuthState, Integration, StyleProfile, IntegrationName, ProfileSourceType } from '../types';
+import { AuthState, IntegrationSummary, StyleProfile, IntegrationName, ProfileSourceType, AppView } from '../types';
 import { GmailIcon, FacebookIcon, PlusCircleIcon, LogOutIcon, BrainIcon, CheckCircleIcon, ClipboardDocumentIcon } from './icons';
 import { parseStylePreview } from '../utils/styleParser';
 
@@ -11,20 +11,22 @@ interface SidebarProps {
     onProfileSelect: (id: string) => void;
     onProfileCreate: () => void;
     onLogout: () => void;
+    integrations: IntegrationSummary[];
+    onConnect: (integration: IntegrationName) => void;
     onDisconnect: (integration: IntegrationName) => void;
+    activeView: AppView;
+    onNavigate: (view: AppView) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ authState, profiles, activeProfileId, onProfileSelect, onProfileCreate, onLogout, onDisconnect }) => {
+const navigationItems: { id: AppView; label: string }[] = [
+    { id: 'dashboard', label: 'Workspace' },
+    { id: 'integrations', label: 'Integrations' },
+    { id: 'billing', label: 'Billing' },
+    { id: 'settings', label: 'Settings' },
+];
+
+const Sidebar: React.FC<SidebarProps> = ({ authState, profiles, activeProfileId, onProfileSelect, onProfileCreate, onLogout, integrations, onConnect, onDisconnect, activeView, onNavigate }) => {
     const { isAuthenticated, user } = authState;
-
-    const integrations: Integration[] = [
-        { name: 'google', connected: !!user?.google },
-        { name: 'facebook', connected: !!user?.facebook },
-    ];
-
-    const handleLogin = (provider: 'google' | 'facebook') => {
-        window.location.href = `/auth/${provider}`;
-    };
 
     return (
         <aside className="w-80 bg-slate-900 text-slate-300 flex flex-col p-4 border-r border-slate-800">
@@ -52,18 +54,32 @@ const Sidebar: React.FC<SidebarProps> = ({ authState, profiles, activeProfileId,
                     </div>
                 )}
             </div>
-            
+
+            <nav className="mb-6">
+                <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Navigation</h2>
+                <div className="space-y-1">
+                    {navigationItems.map(item => (
+                        <button
+                            key={item.id}
+                            onClick={() => onNavigate(item.id)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeView === item.id ? 'bg-indigo-600 text-white' : 'bg-slate-800/60 hover:bg-slate-700 text-slate-300'}`}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+            </nav>
+
             {/* Integrations */}
             <div className="mb-6">
                 <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Integrations</h2>
                 <div className="space-y-2">
                     {integrations.map(int => (
-                        <IntegrationButton 
-                            key={int.name}
-                            name={int.name}
-                            connected={int.connected}
-                            onConnect={() => handleLogin(int.name as 'google' | 'facebook')}
-                            onDisconnect={() => onDisconnect(int.name)}
+                        <IntegrationButton
+                            key={int.id}
+                            integration={int}
+                            onConnect={() => onConnect(int.id)}
+                            onDisconnect={() => onDisconnect(int.id)}
                         />
                     ))}
                 </div>
@@ -94,29 +110,35 @@ const Sidebar: React.FC<SidebarProps> = ({ authState, profiles, activeProfileId,
 };
 
 const IntegrationButton: React.FC<{
-    name: IntegrationName;
-    connected: boolean;
+    integration: IntegrationSummary;
     onConnect: () => void;
     onDisconnect: () => void;
-}> = ({ name, connected, onConnect, onDisconnect }) => {
-    const Icon = name === 'google' ? GmailIcon : FacebookIcon;
-    const label = name === 'google' ? 'Google' : 'Facebook';
+}> = ({ integration, onConnect, onDisconnect }) => {
+    const { id, connected, label, description, connectedAt } = integration;
+    const Icon = id === 'google' ? GmailIcon : id === 'facebook' ? FacebookIcon : ClipboardDocumentIcon;
+    const formattedDate = connectedAt ? new Date(connectedAt).toLocaleDateString() : null;
 
     return (
-        <div className="w-full flex items-center p-2 bg-slate-800/50 rounded-lg">
-            <Icon className="w-5 h-5 mr-3" />
-            <span className="flex-1 text-left font-medium">{label}</span>
-            {connected ? (
-                <div className="flex items-center space-x-2">
-                    <div className="flex items-center space-x-1.5 text-green-400 text-xs">
-                        <CheckCircleIcon className="w-4 h-4"/>
-                        <span>Connected</span>
+        <div className="w-full p-3 bg-slate-800/60 rounded-lg">
+            <div className="flex items-center mb-2">
+                <Icon className="w-5 h-5 mr-3" />
+                <div className="flex-1">
+                    <div className="flex items-center justify-between text-sm font-medium text-slate-200">
+                        <span>{label}</span>
+                        {formattedDate && (
+                            <span className="text-xs text-slate-400">Connected {formattedDate}</span>
+                        )}
                     </div>
-                    <button onClick={onDisconnect} className="text-xs text-slate-400 hover:text-red-400 hover:underline">Disconnect</button>
+                    <p className="text-xs text-slate-400 mt-1 leading-snug">{description}</p>
                 </div>
-            ) : (
-                <button onClick={onConnect} className="text-xs text-indigo-400 hover:underline">Connect</button>
-            )}
+            </div>
+            <div className="flex justify-end">
+                {connected ? (
+                    <button onClick={onDisconnect} className="text-xs text-red-300 hover:text-red-200">Disconnect</button>
+                ) : (
+                    <button onClick={onConnect} className="text-xs text-indigo-300 hover:text-indigo-200">Connect</button>
+                )}
+            </div>
         </div>
     );
 };
