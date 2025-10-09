@@ -3,7 +3,7 @@ import { SendIcon } from './icons';
 import Loader from './Loader';
 
 interface ChatInputProps {
-    onSendMessage: (message: string) => void;
+    onSendMessage: (message: string) => void | Promise<void>;
     isLoading: boolean;
 }
 

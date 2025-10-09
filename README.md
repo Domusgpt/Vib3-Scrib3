@@ -1,22 +1,23 @@
 
 # Scribe AI Platform
 
-Scribe is a multi-provider AI platform that learns your writing style from various communication sources (like Gmail and Facebook) to act as your digital scribe. It can generate responses in your unique voice, controlled via a secure, scalable, and production-ready application.
+Scribe is a multi-provider AI platform that learns your writing style from the tools you already use. It ships with a modular, production-ready stack that handles secure OAuth handshakes, subscription monetisation, usage metering, and multi-model orchestration so you can drop the experience into any workflow.
 
 ## 1. Architecture Overview
 
-This application is built on a robust client-server model designed for security, scalability, and extensibility.
+This application is built on a layered architecture:
 
-*   **Frontend**: A responsive React (TypeScript) single-page application that serves as the user interface. It is a "dumb" client; it contains no sensitive API keys and all major operations are delegated to the backend.
-*   **Backend**: A Node.js (Express/TypeScript) server that acts as the core orchestration layer.
-    *   **Authentication**: Securely handles all OAuth 2.0 flows (Google, Facebook) using Passport.js. The client never touches sensitive tokens.
-    *   **Middleware**: Provides critical security and business logic checks on incoming API requests:
-        1.  `isAuthenticated`: Ensures a user is logged in.
-        2.  `hasActiveLicense`: Checks if the user has a valid license to use core features.
-    *   **API Layer**: Exposes a RESTful API for the frontend to interact with.
-    *   **AI Provider Service**: A modular service that securely communicates with third-party LLM providers (Google Gemini, OpenAI ChatGPT). It handles the full tool-calling loop, routing requests and executing functions on the server side.
-    *   **Database Service**: Manages all data persistence.
-*   **Database**: Uses `lowdb` (a simple, file-based JSON database) to store user information, style profiles, and license data. This can be easily swapped for a production database like PostgreSQL or MongoDB.
+* **Frontend** – A React (TypeScript) SPA that uses dedicated contexts for authentication, subscriptions, and integrations. The UI exposes:
+  * A workspace for drafting with model switching (Gemini and OpenAI).
+  * Billing and usage dashboards powered by live plan definitions.
+  * Integration management, including OAuth redirects and webhook key management.
+* **Backend** – Node.js with Express and Passport, organised into feature modules under `server/src/modules`.
+  * **Auth module**: Handles OAuth (Google/Facebook), session management, and ensures every new account receives a trial subscription.
+  * **Chat module**: Orchestrates multi-provider conversations, including Gemini tool-calling loops and OpenAI fallbacks, then records usage for billing.
+  * **Billing module**: Stores plans, subscriptions, and per-month usage limits so you can monetise without external vendors.
+  * **Integrations module**: Normalises connection metadata for first-party OAuth flows and webhook-based integrations.
+  * **Webhooks module**: Verifies signed callbacks to push generated drafts into other systems.
+* **Data layer** – `lowdb` provides a lightweight persistence layer for local development. The schema already includes users, profiles, subscriptions, usage, plans, and webhook secrets and can be migrated to Postgres/Mongo in production.
 
 ---
 
@@ -36,10 +37,10 @@ cd <repository-directory>
 
 ### Step 2: Install Dependencies
 
-This will install dependencies for both the root, client, and server.
+Install backend dependencies (the frontend is dependency-free and bundled at build time):
 
 ```bash
-npm install
+npm install --prefix server
 ```
 
 ### Step 3: Configure Environment Variables
@@ -87,7 +88,7 @@ You must authorize the backend's callback URLs in your provider dashboards.
 
 ### Step 5: Run the Application
 
-This command will start the backend server. The frontend is served automatically by the backend in this setup.
+Start the API and serve the production SPA bundle:
 
 ```bash
 npm run server
@@ -116,34 +117,36 @@ All API endpoints are prefixed with the `BASE_URL`.
 *   `GET /auth/user`
     *   Retrieves the currently authenticated user's profile and license status.
 
-### AI Chat
+### Chat
 
-*   `POST /api/chat`
-    *   **Middleware:** `isAuthenticated`, `hasActiveLicense`
-    *   The main endpoint for communicating with the AI. The backend handles the full conversation, including any necessary tool calls (function calling), before returning a final response.
-    *   **Body:** `{ prompt: string, history: ChatMessage[], provider: LLMProvider, context?: { activeProfileId: string } }`
-
-### Integrations Data
-
-*   `GET /api/emails`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches recent sent emails from the user's connected Gmail account.
-*   `GET /api/messenger`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches recent messages from the user's connected Facebook account. (Note: Requires advanced permissions from Meta).
+* `GET /api/chat/providers` – returns the available LLM providers and friendly labels.
+* `POST /api/chat/continue` – continues a conversation with the selected provider.
+  * **Middleware:** `requireAuth`, `requireActiveSubscription`
+  * **Body:** `{ prompt: string, history: ChatMessage[], provider?: LLMProvider, context?: { activeProfileId?: string } }`
+* `GET /api/chat/sample-count?source=gmail|facebook` – counts messages available for ingestion from the connected integration.
 
 ### Style Profiles
 
-*   `GET /api/profiles`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches all style profiles for the current user.
-*   `POST /api/profiles`
-    *   **Middleware:** `isAuthenticated`
-    *   Creates a new style profile.
-    *   **Body:** `{ name: string, style: string }`
+* `GET /api/profiles` – list profiles for the authenticated user.
+* `POST /api/profiles` – create a profile manually (LLM automation is also supported).
+* `POST /api/profiles/active` – set the active profile in the session.
+* `PUT /api/profiles/:id` – update profile metadata.
+* `DELETE /api/profiles/:id` – remove a profile.
 
-### Licensing
+### Billing & Monetisation
 
-*   `POST /api/license/activate`
-    *   **Middleware:** `isAuthenticated`
-    *   Activates a license for the current user. (Simulated for this scaffold).
+* `GET /api/billing/plans` – returns the built-in plan catalogue (free, pro, scale).
+* `GET /api/billing/subscription` – fetch the subscriber record for the current user.
+* `POST /api/billing/subscription` – move the user to a different plan tier.
+* `GET /api/billing/usage` – returns the current-month usage counter plus allowance status.
+
+### Integrations
+
+* `GET /api/integrations` – list integration definitions with connection state.
+* `POST /api/integrations/connect` – mark an integration as connected (used for webhook/Zapier style integrations).
+* `POST /api/integrations/disconnect` – revoke stored credentials/metadata for an integration.
+* `GET /api/integrations/webhook-secret` – retrieve the HMAC secret used to sign outbound webhook payloads.
+
+### Webhooks
+
+* `POST /webhooks/drafts` – receive signed callbacks when Scribe generates new drafts for external systems. The `x-scribe-signature` header must include the user identifier and HMAC digest.
