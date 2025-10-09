@@ -1,149 +1,172 @@
+# Scribe AI Platform 2.0
 
-# Scribe AI Platform
+Scribe is a multi-channel AI scribe that learns how you communicate and automates the replies you do not have time to write. The 2.0 release turns the prototype into a modular SaaS product: it adds workspaces, subscription plans, integration governance, API key management, and a richer operator console built with modern React tooling.
 
-Scribe is a multi-provider AI platform that learns your writing style from various communication sources (like Gmail and Facebook) to act as your digital scribe. It can generate responses in your unique voice, controlled via a secure, scalable, and production-ready application.
+## Platform architecture
 
-## 1. Architecture Overview
+| Layer | Responsibilities |
+| --- | --- |
+| **Client (React + Vite)** | Responsive dashboard, workspace navigation, chat/compose canvas, integration marketplace, billing management, API key console. Authentication state and platform metadata are provided through context providers so any view can render instantly. |
+| **API Gateway (Express + Passport)** | Secure OAuth flows (Google/Facebook), session management, tenant hydration, and request middleware enforcing authentication & subscription requirements. |
+| **Domain services** | Modular services for AI orchestration, billing, integrations, profiles, usage metering, and API key generation. Each service operates on a shared LowDB persistence layer that can be swapped with Postgres or another production database. |
+| **LLM providers** | Pluggable strategy for Gemini and OpenAI. If keys are missing the gateway degrades gracefully and returns an informative response. |
 
-This application is built on a robust client-server model designed for security, scalability, and extensibility.
+### Backend modules
 
-*   **Frontend**: A responsive React (TypeScript) single-page application that serves as the user interface. It is a "dumb" client; it contains no sensitive API keys and all major operations are delegated to the backend.
-*   **Backend**: A Node.js (Express/TypeScript) server that acts as the core orchestration layer.
-    *   **Authentication**: Securely handles all OAuth 2.0 flows (Google, Facebook) using Passport.js. The client never touches sensitive tokens.
-    *   **Middleware**: Provides critical security and business logic checks on incoming API requests:
-        1.  `isAuthenticated`: Ensures a user is logged in.
-        2.  `hasActiveLicense`: Checks if the user has a valid license to use core features.
-    *   **API Layer**: Exposes a RESTful API for the frontend to interact with.
-    *   **AI Provider Service**: A modular service that securely communicates with third-party LLM providers (Google Gemini, OpenAI ChatGPT). It handles the full tool-calling loop, routing requests and executing functions on the server side.
-    *   **Database Service**: Manages all data persistence.
-*   **Database**: Uses `lowdb` (a simple, file-based JSON database) to store user information, style profiles, and license data. This can be easily swapped for a production database like PostgreSQL or MongoDB.
+```
+server/src
+├── app.ts                  # Express app factory with middleware + routing
+├── config/
+│   ├── env.ts              # Zod-validated environment configuration
+│   ├── integrations.ts     # Integration marketplace catalogue
+│   ├── passport.ts         # OAuth strategies & serialization
+│   └── plans.ts            # Subscription catalogue with limits
+├── controllers/            # (future extension point)
+├── database/db.ts          # LowDB initialization and schema defaults
+├── middleware/             # Auth, tenant context, subscription guards
+├── routes/                 # Auth, chat, profiles, platform, billing, integrations
+└── services/               # Billing, AI gateway, profiles, integrations, api keys, tenants, usage, users
+```
 
----
+Each request passes through `requireAuthentication` and `attachTenantContext`, which materialise the workspace, ensure a trial subscription exists, and bind subscription/licence metadata onto the request. Feature gates can then simply check `req.subscription`.
 
-## 2. Setup and Deployment
+### Frontend modules
+
+```
+App.tsx                     # Router + layout wiring
+components/
+  layout/AppLayout.tsx      # Persistent shell & navigation
+  compose/                  # Chat canvas UI and sidebars
+pages/                      # Overview, Compose, Integrations, Billing, API Keys
+providers/                  # Auth and platform context providers
+services/                   # REST helpers shared across views
+```
+
+The UI ships with five primary screens:
+
+1. **Overview** – workspace snapshot, active plan, usage counters, and next-best actions.
+2. **Compose** – the conversational drafting studio powered by the AI gateway and style profiles.
+3. **Integrations** – marketplace with connection state, scope visibility, and connect/disconnect flows.
+4. **Billing** – plan catalogue with upgrade/checkout hooks and trial activation.
+5. **API Keys** – key issuance (with hashed storage) and revocation workflow for builders embedding Scribe.
+
+## Getting started
 
 ### Prerequisites
 
-*   Node.js (v18 or later)
-*   npm or yarn
+- Node.js ≥ 18
+- npm (ships with Node)
 
-### Step 1: Clone the Repository
-
-```bash
-git clone <repository-url>
-cd <repository-directory>
-```
-
-### Step 2: Install Dependencies
-
-This will install dependencies for both the root, client, and server.
+### 1. Install dependencies
 
 ```bash
 npm install
+npm install --prefix server
 ```
 
-### Step 3: Configure Environment Variables
+### 2. Configure environment variables
 
-Create a `.env` file inside the `server/` directory. Use the `server/.env.example` as a template.
+Create `server/.env` using the template below:
 
-```
-# server/.env
+```dotenv
+SESSION_SECRET="long_random_string"
+BASE_URL="http://localhost:3001"
 
-# Session Management
-SESSION_SECRET='REPLACE_WITH_A_LONG_RANDOM_STRING'
+# OAuth client credentials
+GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="..."
+FACEBOOK_APP_ID="..."
+FACEBOOK_APP_SECRET="..."
 
-# Google Credentials (for Gmail Integration)
-# Get from Google Cloud Console -> APIs & Services -> Credentials
-GOOGLE_CLIENT_ID='YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'
-GOOGLE_CLIENT_SECRET='YOUR_GOOGLE_CLIENT_SECRET'
+# LLM providers (optional but recommended)
+API_KEY="your_gemini_key"
+OPENAI_API_KEY="your_openai_key"
 
-# Facebook Credentials (for Messenger Integration)
-# Get from Meta for Developers -> App Dashboard
-FACEBOOK_APP_ID='YOUR_FACEBOOK_APP_ID'
-FACEBOOK_APP_SECRET='YOUR_FACEBOOK_APP_SECRET'
-
-# AI Provider API Keys
-# Get from Google AI Studio (ensure it's for Gemini)
-API_KEY='YOUR_GOOGLE_GEMINI_API_KEY'
-# Get from platform.openai.com
-OPENAI_API_KEY='YOUR_OPENAI_API_KEY'
-
-# Application URL (for OAuth Callbacks)
-# For local development:
-BASE_URL='http://localhost:3001'
+# Optional billing integrations
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_PRICE_PRO_MONTHLY="price_..."
+STRIPE_PRICE_SCALE_MONTHLY="price_..."
 ```
 
-### Step 4: Configure OAuth Redirect URIs
+Authorise the following redirect URIs with Google and Meta:
 
-You must authorize the backend's callback URLs in your provider dashboards.
+- `http://localhost:3001/auth/google/callback`
+- `http://localhost:3001/auth/facebook/callback`
 
-*   **Google Cloud Console:**
-    *   Go to "APIs & Services" -> "Credentials".
-    *   Select your OAuth 2.0 Client ID.
-    *   Under "Authorized redirect URIs", add: `http://localhost:3001/auth/google/callback`
-*   **Meta for Developers:**
-    *   Go to your App -> "Facebook Login" -> "Settings".
-    *   Under "Valid OAuth Redirect URIs", add: `http://localhost:3001/auth/facebook/callback`
-
-### Step 5: Run the Application
-
-This command will start the backend server. The frontend is served automatically by the backend in this setup.
+### 3. Run the platform
 
 ```bash
-npm run server
+# Terminal 1 – API + SSR bundle
+npm run server --prefix server
+
+# Terminal 2 – Frontend during development
+npm run dev
 ```
 
-Navigate to `http://localhost:3001` in your browser.
+Navigate to `http://localhost:3000` for the Vite dev server (the Express server will serve the compiled bundle in production).
 
----
+## REST API summary
 
-## 3. API Documentation
-
-All API endpoints are prefixed with the `BASE_URL`.
+All endpoints are served from the Express gateway (`BASE_URL`, defaults to `http://localhost:3001`). Sessions require cookies (`credentials: include`).
 
 ### Authentication
 
-*   `GET /auth/google`
-    *   Initiates the Google OAuth 2.0 sign-in flow. Redirects to Google.
-*   `GET /auth/google/callback`
-    *   Callback URL for Google to redirect to after user consent.
-*   `GET /auth/facebook`
-    *   Initiates the Facebook OAuth 2.0 sign-in flow.
-*   `GET /auth/facebook/callback`
-    *   Callback URL for Facebook.
-*   `POST /auth/logout`
-    *   Logs the user out and destroys the session.
-*   `GET /auth/user`
-    *   Retrieves the currently authenticated user's profile and license status.
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/auth/google` | Initiate Google OAuth. |
+| GET | `/auth/google/callback` | Google OAuth callback. |
+| GET | `/auth/facebook` | Initiate Facebook OAuth. |
+| GET | `/auth/facebook/callback` | Facebook OAuth callback. |
+| POST | `/auth/logout` | Destroy the session. |
+| GET | `/auth/user` | Current user + workspace + subscription snapshot. |
 
-### AI Chat
+### Compose & profiles
 
-*   `POST /api/chat`
-    *   **Middleware:** `isAuthenticated`, `hasActiveLicense`
-    *   The main endpoint for communicating with the AI. The backend handles the full conversation, including any necessary tool calls (function calling), before returning a final response.
-    *   **Body:** `{ prompt: string, history: ChatMessage[], provider: LLMProvider, context?: { activeProfileId: string } }`
+| Method | Path | Guards | Description |
+| --- | --- | --- | --- |
+| GET | `/api/profiles` | Auth | List style profiles + active profile. |
+| POST | `/api/profiles` | Auth | Create a profile (from pasted samples or connected integrations). |
+| POST | `/api/profiles/active` | Auth | Set the active style profile ID for the session. |
+| POST | `/api/chat/continue` | Auth + Active subscription | Continue a conversation with the configured LLM provider. |
 
-### Integrations Data
+### Platform metadata
 
-*   `GET /api/emails`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches recent sent emails from the user's connected Gmail account.
-*   `GET /api/messenger`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches recent messages from the user's connected Facebook account. (Note: Requires advanced permissions from Meta).
+| Method | Path | Guards | Description |
+| --- | --- | --- | --- |
+| GET | `/api/platform/overview` | Auth | Workspace, subscription, usage metrics, API keys, and integration state. |
+| POST | `/api/platform/api-keys` | Auth | Issue a new API key (hashed at rest, clear text returned once). |
+| DELETE | `/api/platform/api-keys/:id` | Auth | Revoke an API key. |
 
-### Style Profiles
+### Billing
 
-*   `GET /api/profiles`
-    *   **Middleware:** `isAuthenticated`
-    *   Fetches all style profiles for the current user.
-*   `POST /api/profiles`
-    *   **Middleware:** `isAuthenticated`
-    *   Creates a new style profile.
-    *   **Body:** `{ name: string, style: string }`
+| Method | Path | Guards | Description |
+| --- | --- | --- | --- |
+| GET | `/api/billing/plans` | Public | Plan catalogue. |
+| POST | `/api/billing/checkout` | Auth | Simulated checkout URL generation for the requested plan. |
+| POST | `/api/billing/activate` | Auth | Immediately activate/upgrade to a plan (post-checkout webhook simulation). |
 
-### Licensing
+### Integrations
 
-*   `POST /api/license/activate`
-    *   **Middleware:** `isAuthenticated`
-    *   Activates a license for the current user. (Simulated for this scaffold).
+| Method | Path | Guards | Description |
+| --- | --- | --- | --- |
+| GET | `/api/integrations/catalog` | Public | List available integrations, scopes, and status. |
+| GET | `/api/integrations/connections` | Auth | List workspace connections. |
+| POST | `/api/integrations/connect` | Auth | Persist a connection + scope grant for a provider. |
+| POST | `/api/integrations/disconnect` | Auth | Revoke a provider connection. |
+
+## Monetisation model
+
+- **Plans** live in `server/src/config/plans.ts` and define price points, limits, and included seats. They can be piped into Stripe/Paddle using the provided checkout hook.
+- **Trials** are automatically provisioned per workspace when a user authenticates; upgrade flows can call `POST /api/billing/activate` after a checkout webhook fires.
+- **Usage metering** (`usage.service.ts`) stores per-period counts for messages, generated profiles, and automation triggers, enabling billing overages or quota enforcement.
+- **API keys** use hashed storage and expose only truncated previews for dashboard display, reducing credential leakage risk.
+
+## Swapping infrastructure
+
+- Replace LowDB with Postgres by implementing repository adapters inside `server/src/services/*`—all persistence logic is already consolidated.
+- Drop in additional OAuth providers by adding strategies to `config/passport.ts` and exposing them through the `/auth` router.
+- Extend the integration marketplace by editing `config/integrations.ts`; the UI consumes the same catalogue to render available connectors.
+
+## Testing notes
+
+No automated test harness ships with the scaffold yet. The backend is TypeScript-strict and front-end components rely on prop typings to minimise runtime surprises. Add Vitest or Jest suites where critical once the business logic stabilises.

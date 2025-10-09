@@ -1,0 +1,72 @@
+import { SubscriptionPlan } from '../../../types';
+
+export const subscriptionPlans: SubscriptionPlan[] = [
+  {
+    id: 'plan_starter',
+    name: 'Starter',
+    slug: 'starter',
+    description: 'Perfect for individual creators getting started with an AI writing partner.',
+    priceMonthly: 19,
+    priceYearly: 190,
+    trialDays: 14,
+    seatsIncluded: 1,
+    features: [
+      'Unlimited chat with your writing co-pilot',
+      'Up to 5 active style profiles',
+      'Gmail + Facebook Messenger connectors',
+      'API access with 10k tokens per month',
+    ],
+    limits: {
+      monthlyMessages: 500,
+      profiles: 5,
+      connectors: 2,
+      automations: 5,
+    },
+  },
+  {
+    id: 'plan_pro',
+    name: 'Professional',
+    slug: 'pro',
+    description: 'Collaborate with your team and unlock advanced workflow automation.',
+    priceMonthly: 59,
+    priceYearly: 590,
+    trialDays: 21,
+    seatsIncluded: 5,
+    features: [
+      'Everything in Starter',
+      'Shared workspaces & roles',
+      'Priority AI throughput and smart batching',
+      'Native CRM + Slack connectors',
+      'API access with 100k tokens per month',
+    ],
+    limits: {
+      monthlyMessages: 5000,
+      profiles: 25,
+      connectors: 10,
+      automations: 25,
+    },
+  },
+  {
+    id: 'plan_scale',
+    name: 'Scale',
+    slug: 'scale',
+    description: 'For organizations that need governance, observability, and enterprise integrations.',
+    priceMonthly: 149,
+    priceYearly: 1490,
+    trialDays: 30,
+    seatsIncluded: 20,
+    features: [
+      'Everything in Professional',
+      'SAML SSO and SCIM provisioning',
+      'Dedicated success architect',
+      'Private deployment options',
+      'Unlimited API throughput with usage-based overages',
+    ],
+    limits: {
+      monthlyMessages: 20000,
+      profiles: 100,
+      connectors: 50,
+      automations: 200,
+    },
+  },
+];

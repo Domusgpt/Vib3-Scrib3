@@ -1,12 +1,24 @@
 {
   "name": "scribe-ai-platform",
-  "version": "1.0.0",
-  "description": "A multi-provider AI platform for generating text in a user's learned writing style.",
+  "version": "2.0.0",
+  "description": "A professional multi-channel AI scribe with modular integrations and billing.",
   "private": true,
   "scripts": {
-    "install": "npm install --prefix server",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "server": "npm run dev --prefix server"
   },
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.23.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.22",
+    "@types/react-dom": "^18.2.7",
+    "typescript": "^5.5.3",
+    "vite": "^5.2.0"
+  }
 }

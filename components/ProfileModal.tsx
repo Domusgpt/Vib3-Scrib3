@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Loader from './Loader';
 import { AuthState, ProfileSource, ProfileSourceType } from '../types';
 import { ClipboardDocumentIcon, GmailIcon, FacebookIcon } from './icons';
-import * as apiService from '../services/apiService';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -16,8 +15,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onCreate, 
     const [name, setName] = useState('');
     const [samples, setSamples] = useState('');
     const [sourceType, setSourceType] = useState<ProfileSourceType>('text');
-    const [sampleCounts, setSampleCounts] = useState<{ gmail?: number; facebook?: number }>({});
-    const [isCounting, setIsCounting] = useState(false);
+    const [sampleCounts] = useState<{ gmail?: number; facebook?: number }>({});
 
     useEffect(() => {
         if (isOpen) {
@@ -27,30 +25,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onCreate, 
             setSourceType('text');
             setSampleCounts({});
 
-            const fetchCounts = async () => {
-                setIsCounting(true);
-                const sourcesToFetch: ProfileSourceType[] = [];
-                if (authState.user?.google) sourcesToFetch.push('gmail');
-                if (authState.user?.facebook) sourcesToFetch.push('facebook');
-
-                const countPromises = sourcesToFetch.map(source => 
-                    apiService.getSampleCount(source as 'gmail' | 'facebook')
-                );
-
-                const results = await Promise.allSettled(countPromises);
-
-                const newCounts: { gmail?: number; facebook?: number } = {};
-                results.forEach(result => {
-                    if (result.status === 'fulfilled' && result.value) {
-                        newCounts[result.value.source as 'gmail' | 'facebook'] = result.value.count;
-                    }
-                });
-                
-                setSampleCounts(newCounts);
-                setIsCounting(false);
-            };
-
-            fetchCounts();
+            // In the new architecture we derive sample availability directly from integration metadata.
+            // This placeholder state ensures backwards compatibility with legacy UI that expects counts.
         }
     }, [isOpen, authState.user]);
 
@@ -114,7 +90,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onCreate, 
                                 disabled={!authState.user?.google}
                                 title={!authState.user?.google ? "Connect your Google account first" : ""}
                                 count={sampleCounts.gmail}
-                                isCounting={isCounting && authState.user?.google && !sampleCounts.hasOwnProperty('gmail')}
                             />
                             <SourceButton 
                                 icon={<FacebookIcon className="w-5 h-5"/>} 
@@ -124,7 +99,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onCreate, 
                                 disabled={!authState.user?.facebook}
                                 title={!authState.user?.facebook ? "Connect your Facebook account first" : ""}
                                 count={sampleCounts.facebook}
-                                isCounting={isCounting && authState.user?.facebook && !sampleCounts.hasOwnProperty('facebook')}
                             />
                         </div>
                     </div>
@@ -183,8 +157,7 @@ const SourceButton: React.FC<{
     disabled?: boolean;
     title?: string;
     count?: number;
-    isCounting?: boolean;
-}> = ({ icon, label, isActive, onClick, disabled, title, count, isCounting }) => (
+}> = ({ icon, label, isActive, onClick, disabled, title, count }) => (
      <button
         type="button"
         onClick={onClick}
@@ -200,12 +173,8 @@ const SourceButton: React.FC<{
             <span>{label}</span>
         </div>
         <div className="text-xs text-slate-400 h-4 flex items-center justify-center">
-             {isCounting ? (
-                <Loader className="w-3 h-3"/>
-            ) : (
-                typeof count === 'number' && (
-                    <span>~{count} samples</span>
-                )
+            {typeof count === 'number' && (
+                <span>~{count} samples</span>
             )}
         </div>
     </button>
