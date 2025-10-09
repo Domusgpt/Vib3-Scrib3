@@ -1,5 +1,5 @@
 {
-  "name": "Refactor Vib3-Scib3 ",
-  "description": "Train an AI scribe on your communication style to generate responses that sound just like you. Paste your emails or messages, analyze your style, and let your digital twin handle routine replies.",
+  "name": "Scribe AI Platform",
+  "description": "A workspace-ready AI scribe with billing, integrations, and API access. Connect Gmail, Messenger, Slack (soon) and let Scribe draft on-brand replies automatically.",
   "requestFramePermissions": []
 }
