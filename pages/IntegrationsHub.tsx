@@ -7,7 +7,8 @@ import NotificationBanner from '../components/workspace/NotificationBanner';
 import AuthModal from '../components/AuthModal';
 import { IntegrationName, IntegrationSummary } from '../types';
 import * as apiService from '../services/apiService';
-import { useConsoleBootstrap } from '../hooks/useConsoleBootstrap';
+import { useConsole } from '../hooks/useConsoleContext';
+import { useBillingActions } from '../hooks/useBillingActions';
 
 const IntegrationsHub: React.FC = () => {
     const {
@@ -19,13 +20,13 @@ const IntegrationsHub: React.FC = () => {
         profiles,
         activeProfileId,
         isBootstrapping,
-        initialize,
         refreshAuthState,
         refreshUsage,
         selectProfile,
         switchOrganization,
         error: bootstrapError,
-    } = useConsoleBootstrap();
+        logout,
+    } = useConsole();
 
     const [integrationSummaries, setIntegrationSummaries] = useState<IntegrationSummary[]>([]);
     const [isOverviewLoading, setOverviewLoading] = useState(false);
@@ -35,8 +36,20 @@ const IntegrationsHub: React.FC = () => {
     const [banner, setBanner] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
     const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
     const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-    const [isBillingActionLoading, setBillingActionLoading] = useState(false);
     const [isSeedingSandbox, setSeedingSandbox] = useState(false);
+
+    const {
+        isLoading: isBillingActionLoading,
+        startTrial,
+        upgradePlan,
+        openPortal,
+    } = useBillingActions({
+        authState,
+        activeOrganizationId,
+        refreshAuthState,
+        refreshUsage,
+        onRequireAuth: () => setAuthModalOpen(true),
+    });
 
     const loadOverview = useCallback(async () => {
         if (!authState.isAuthenticated) {
@@ -129,65 +142,63 @@ const IntegrationsHub: React.FC = () => {
     };
 
     const handleStartTrial = async (planId: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await startTrial(planId);
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            await apiService.startTrial(planId, activeOrganizationId ?? undefined);
-            await refreshAuthState();
-            await refreshUsage(activeOrganizationId ?? undefined);
-            setBanner({ type: 'success', message: 'Trial activated. Enjoy the expanded automation capacity.' });
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to start trial.' });
-        } finally {
-            setBillingActionLoading(false);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
         }
+        setBanner({ type: 'success', message: 'Trial activated. Enjoy the expanded automation capacity.' });
     };
 
     const handleUpgradePlan = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await upgradePlan(planId, cadence);
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { checkoutUrl } = await apiService.createCheckoutSession(planId, cadence, activeOrganizationId ?? undefined);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
+        }
+        const checkoutUrl = result.data?.checkoutUrl;
+        if (checkoutUrl) {
             window.open(checkoutUrl, '_blank', 'noopener');
             setBanner({ type: 'info', message: 'Checkout opened in a new tab.' });
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to start checkout session.' });
-        } finally {
-            setBillingActionLoading(false);
         }
     };
 
     const handleOpenPortal = async () => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await openPortal();
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { url } = await apiService.openBillingPortal(activeOrganizationId ?? undefined);
-            window.open(url, '_blank', 'noopener');
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to open billing portal.' });
-        } finally {
-            setBillingActionLoading(false);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
+        }
+        const portalUrl = result.data?.url;
+        if (portalUrl) {
+            window.open(portalUrl, '_blank', 'noopener');
         }
     };
 
     const handleLogout = async () => {
-        await apiService.logout();
-        await initialize();
+        await logout();
         setBanner({ type: 'info', message: 'You have been signed out.' });
     };
 
     const handleOrganizationChange = async (organizationId: string) => {
-        await switchOrganization(organizationId);
-        await loadOverview();
+        try {
+            await switchOrganization(organizationId);
+            await loadOverview();
+        } catch (error) {
+            setBanner({
+                type: 'error',
+                message: error instanceof Error ? error.message : 'Unable to switch workspace.',
+            });
+        }
     };
 
     const handleSeedSandbox = async () => {
