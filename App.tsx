@@ -1,5 +1,9 @@
 import React from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import WorkspaceSettings from './pages/WorkspaceSettings';
+import IntegrationsHub from './pages/IntegrationsHub';
+import InsightsCenter from './pages/InsightsCenter';
 
 /**
  * Welcome to Scribe AI!
@@ -14,7 +18,15 @@ import HomePage from './pages/HomePage';
  */
 const App: React.FC = () => {
     return (
-        <HomePage />
+        <BrowserRouter>
+            <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/workspace" element={<WorkspaceSettings />} />
+                <Route path="/integrations" element={<IntegrationsHub />} />
+                <Route path="/insights" element={<InsightsCenter />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </BrowserRouter>
     );
 };
 

@@ -1,25 +1,32 @@
-import { db } from '../db';
+import { NextFunction, Request, Response } from 'express';
+import { billingService } from '../modules/billing/billing.service';
+import { licenseService } from '../modules/licenses/license.service';
 
-// FIX: Removed explicit types from middleware arguments to prevent type errors.
-export const isAuthenticated = (req, res, next) => {
+export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ message: 'User not authenticated' });
+  return res.status(401).json({ message: 'User not authenticated' });
 };
 
-// FIX: Removed explicit types from middleware arguments to prevent type errors.
-export const hasActiveLicense = async (req, res, next) => {
+export const hasActiveLicense = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ message: 'User not authenticated' });
   }
 
-  const userId = (req.user as any).id;
-  const license = db.data.licenses.find(l => l.userId === userId);
+  const userId = req.user.id;
+  const [license, subscription] = await Promise.all([
+    licenseService.getLicenseForUser(userId),
+    billingService.getSubscriptionForUser(userId),
+  ]);
 
-  if (license && license.status === 'active') {
+  const isActive =
+    (license && license.status === 'active') ||
+    (subscription && (subscription.status === 'active' || subscription.status === 'trialing'));
+
+  if (isActive) {
     return next();
   }
 
-  res.status(403).json({ message: 'An active license is required to use this feature.' });
+  return res.status(403).json({ message: 'An active license or subscription is required to use this feature.' });
 };
