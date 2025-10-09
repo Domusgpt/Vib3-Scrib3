@@ -34,12 +34,12 @@ The backend is the brain of the application, orchestrating all logic, authentica
     *   This makes the frontend secure and simplifies its logic immensely.
 
 *   **API & Security Middleware:**
-    *   The API layer provides structured endpoints for the client.
+    *   The API layer is split into feature routers (`auth`, `profiles`, `chat`, `integrations`, `billing`, `organizations`, `api-keys`, `webhooks`, `audit`).
     *   All sensitive endpoints are protected by middleware:
         1.  `isAuthenticated`: Checks for a valid user session before allowing the request to proceed.
-        2.  `hasActiveLicense`: Enforces business logic, ensuring a user has an active license to use core features. This is a critical pattern for future monetization.
+        2.  `hasActiveLicense`: Enforces business logic, ensuring a user has an active license or subscription to use core features.
 
-*   **AI Service Layer (`server/services/ai-providers.ts`):**
+*   **AI Service Layer (`server/modules/chat/llm.service.ts`):**
     *   This is the most important component. It abstracts all interactions with Large Language Models (LLMs) like Google Gemini.
     *   **Server-Side Tool-Calling Loop:** The frontend does not engage in a multi-step conversation with the AI. Instead, it sends a single, high-level user prompt (e.g., *"Create a new style profile named "My Project Emails" by analyzing my writing samples from Gmail."*).
     *   The backend receives this prompt and initiates a loop with the Gemini model:
@@ -52,8 +52,13 @@ The backend is the brain of the application, orchestrating all logic, authentica
 
 *   **Database (`lowdb`):**
     *   Currently uses `lowdb`, a simple file-based JSON database for rapid development.
-    *   It stores users, style profiles, licenses, and encrypted tokens.
+    *   It stores users, style profiles, licenses, subscriptions, usage telemetry, organizations, memberships, invitations, API keys, webhooks, audit logs, and encrypted tokens.
     *   This is designed to be easily swappable with a production-grade database like PostgreSQL or MongoDB without changing the application's core logic.
+
+*   **Workspace Governance:**
+    *   Every user receives a personal workspace automatically on first login. Additional team workspaces can be created from the `/workspace` control center.
+    *   Workspaces manage seat limits, role-based access (owner, admin, author, viewer), and invitations. Session state tracks the active workspace to scope usage, billing, and chat enforcement.
+    *   API keys and webhooks are issued per workspace with signed deliveries and scope-based secrets; all actions are captured in an immutable audit log.
 
 ## 3. Goals & Vision for Integration and Ease of Use
 
@@ -67,6 +72,8 @@ Connecting an account like Gmail should be a "fire and forget" action with immed
     *   Secure OAuth 2.0 flows for Google and Facebook.
     *   The ability to create style profiles from connected sources with a single natural language command.
     *   The UI provides feedback on connection status and the approximate number of available writing samples, giving users confidence before they commit to an action.
+    *   A dedicated `/integrations` hub that surfaces health, sample counts, and quick actions for each connector.
+    *   Workspace administration for teams: multi-seat management, invitations, scoped API keys, webhooks, and a live audit trail to integrate Scribe with external systems.
 
 *   **What We Intend (The Path Forward):**
     *   **Deeper Contextual Awareness:** The AI should do more than just fetch samples. It should be able to operate within the context of the integrated service. For example: *"Draft a reply to the last email from Jane Doe using my professional style."* The backend would need to fetch that specific email, provide its content to the LLM along with the style profile, and generate a relevant draft.
@@ -86,6 +93,7 @@ The user should never be confused about what to do next or what the system is do
     *   **Guided Onboarding:** A new user should be guided through their first integration connection and style profile creation, demonstrating the core value proposition within the first 60 seconds of use.
     *   **Editable Style Profiles:** After the AI generates a style profile, users should be able to review and manually tweak its characteristics (e.g., "Tone: Make 10% more formal"). This gives users final control and builds trust.
     *   **"One-Click" Actions:** While the natural language interface is powerful, common actions should also be available as buttons. For example, next to a connected Gmail integration, a "Create Style Profile" button could trigger the entire analysis process without the user needing to type anything.
+    *   **Advanced Governance:** Expand workspace tooling with usage-based billing dashboards, seat overage alerts, and integration templates (Zapier, Make, Slack bots) that leverage the webhook and API key infrastructure.
 
 ## 4. Summary for the Development Team
 

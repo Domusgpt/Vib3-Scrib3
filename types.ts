@@ -35,6 +35,23 @@ export interface Integration {
   connected: boolean;
 }
 
+export type IntegrationHealthStatus = 'connected' | 'disconnected' | 'action_required' | 'coming_soon';
+
+export interface IntegrationSummary {
+  name: IntegrationName;
+  title: string;
+  description: string;
+  connected: boolean;
+  status: IntegrationHealthStatus;
+  statusMessage: string;
+  sampleCount: number | null;
+  lastCheckedAt: string | null;
+  connectPath: string;
+  docsUrl: string;
+  categories: string[];
+  beta?: boolean;
+}
+
 // --- Profile Creation ---
 export type ProfileSourceType = 'text' | 'gmail' | 'facebook';
 
@@ -71,17 +88,215 @@ export interface StyleProfile {
 }
 
 export interface License {
+  id: string;
+  userId: string;
+  organizationId?: string;
+  status: 'active' | 'inactive' | 'past_due';
+  planId: string;
+  trialEndsAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingPlan {
+  id: string;
+  name: string;
+  description: string;
+  priceMonthly: number;
+  priceYearly: number;
+  pricePerSeat?: number;
+  trialDays?: number;
+  features: string[];
+  limits: {
+    monthlyMessages: number; // -1 is unlimited
+    integrations: number; // -1 is unlimited
+    seats: number;
+  };
+  isPopular?: boolean;
+  meteredAddOns?: Array<{
     id: string;
-    userId: string;
-    status: 'active' | 'inactive';
-    createdAt: string;
-    updatedAt: string;
+    name: string;
+    unitPrice: number;
+    unit: string;
+  }>;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  planId: string;
+  status: 'trialing' | 'active' | 'past_due' | 'canceled';
+  startedAt: string;
+  renewsAt?: string;
+  seats: number;
+  customerPortalUrl?: string;
+  billingEmail?: string;
+  trialEndsAt?: string;
+  organizationId?: string;
+}
+
+export interface UsageRecord {
+  id: string;
+  userId: string;
+  organizationId: string;
+  month: string; // YYYY-MM
+  messageCount: number;
+  tokenCount: number;
+  lastMessageAt?: string;
+}
+
+export interface UsageSnapshot {
+  organizationId: string;
+  planId: string;
+  monthlyLimit: number; // -1 for unlimited
+  usedMessages: number;
+  remainingMessages: number | 'unlimited';
+  cycleRenewsAt: string;
+  seats?: OrganizationSeatSnapshot;
+}
+
+export type OrganizationRole = 'owner' | 'admin' | 'author' | 'viewer';
+
+export type OrganizationType = 'personal' | 'team';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  type: OrganizationType;
+  planId: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  billingEmail?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type MembershipStatus = 'active' | 'invited' | 'suspended';
+
+export interface Membership {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: OrganizationRole;
+  status: MembershipStatus;
+  invitedEmail?: string;
+  invitedAt?: string;
+  joinedAt?: string;
+  lastActiveAt?: string;
+}
+
+export interface OrganizationSeatSnapshot {
+  used: number;
+  limit: number | 'unlimited';
+}
+
+export interface OrganizationSummary {
+  organization: Organization;
+  membership: Membership;
+  seats: OrganizationSeatSnapshot;
+  subscription: Subscription | null;
+}
+
+export interface OrganizationMember {
+  membership: Membership;
+  user: User | null;
+}
+
+export interface Invitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: OrganizationRole;
+  token: string;
+  inviterId: string;
+  expiresAt: string;
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export type ApiScope =
+  | 'chat:write'
+  | 'chat:read'
+  | 'profiles:read'
+  | 'profiles:write'
+  | 'billing:read';
+
+export interface ApiKey {
+  id: string;
+  organizationId: string;
+  name: string;
+  prefix: string;
+  hashedSecret: string;
+  lastFour: string;
+  scopes: ApiScope[];
+  createdAt: string;
+  createdBy: string;
+  expiresAt?: string;
+  revokedAt?: string;
+  lastUsedAt?: string;
+}
+
+export interface ApiKeySummary {
+  id: string;
+  organizationId: string;
+  name: string;
+  prefix: string;
+  lastFour: string;
+  scopes: ApiScope[];
+  createdAt: string;
+  createdBy: string;
+  expiresAt?: string;
+  revokedAt?: string;
+  lastUsedAt?: string;
+}
+
+export interface ApiKeyWithSecret {
+  key: ApiKeySummary;
+  secret: string;
+}
+
+export type WebhookEvent =
+  | 'chat.completed'
+  | 'profile.created'
+  | 'profile.updated'
+  | 'billing.invoice.created';
+
+export interface WebhookSubscription {
+  id: string;
+  organizationId: string;
+  url: string;
+  events: WebhookEvent[];
+  secret: string;
+  secretLastFour: string;
+  status: 'active' | 'paused';
+  createdAt: string;
+  createdBy: string;
+  lastDeliveredAt?: string;
+  lastFailureAt?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  organizationId: string;
+  actorId: string | null;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
   license: License | null;
+  subscription: Subscription | null;
+  usage: UsageSnapshot | null;
+  organizations?: OrganizationSummary[];
+  activeOrganizationId?: string | null;
+  invitations?: Invitation[];
 }
 
 // FIX: Augment Express Request type to include properties from passport and express-session.
@@ -101,6 +316,7 @@ declare global {
     // without conflicting with the core @types/express-session declaration.
     interface SessionData {
       activeProfileId?: string;
+      activeOrganizationId?: string;
     }
   }
 }
