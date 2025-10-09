@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/chat/ChatView';
@@ -9,7 +9,7 @@ import AppShell from '../components/layout/AppShell';
 import WorkspaceSummaryBar from '../components/dashboard/WorkspaceSummaryBar';
 import { ChatMessage, IntegrationName, MessageAuthor, ProfileSource } from '../types';
 import * as apiService from '../services/apiService';
-import { useConsoleBootstrap } from '../hooks/useConsoleBootstrap';
+import { useConsolePageState } from '../hooks/useConsolePageState';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
@@ -19,31 +19,40 @@ const HomePage: React.FC = () => {
         usageSnapshot,
         organizations,
         activeOrganizationId,
+        activeOrganization,
         profiles,
         activeProfileId,
         isBootstrapping,
         error: bootstrapError,
-        initialize,
         refreshAuthState,
         refreshUsage,
         reloadProfiles,
         selectProfile,
         switchOrganization,
-    } = useConsoleBootstrap();
+        logout,
+        billingActions,
+        authModal,
+    } = useConsolePageState({ autoOpenAuthModal: true });
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [isBillingActionLoading, setBillingActionLoading] = useState(false);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
-    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+
+    const {
+        isLoading: isBillingActionLoading,
+        startTrial,
+        upgradePlan,
+        openPortal,
+    } = billingActions;
+    const { isOpen: isAuthModalOpen, open: openAuthModal, close: closeAuthModal } = authModal;
 
     const handleOpenProfileModal = useCallback(() => {
         if (authState.isAuthenticated) {
             setProfileModalOpen(true);
         } else {
-            setAuthModalOpen(true);
+            openAuthModal();
         }
-    }, [authState.isAuthenticated]);
+    }, [authState.isAuthenticated, openAuthModal]);
 
     useEffect(() => {
         if (isBootstrapping) {
@@ -67,7 +76,7 @@ const HomePage: React.FC = () => {
 
     const handleSendMessage = async (text: string) => {
         if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+            openAuthModal();
             return;
         }
 
@@ -88,7 +97,7 @@ const HomePage: React.FC = () => {
             }
 
             setMessages(prev => [...prev, response]);
-            await refreshUsage(activeOrganizationId ?? undefined);
+            await refreshUsage(activeOrganization?.organization.id);
         } catch (error) {
             const errorMessage: ChatMessage = {
                 author: MessageAuthor.SYSTEM,
@@ -135,8 +144,7 @@ const HomePage: React.FC = () => {
     };
 
     const handleLogout = async () => {
-        await apiService.logout();
-        await initialize();
+        await logout();
         setMessages([{ author: MessageAuthor.BOT, text: 'You have been logged out.' }]);
     };
 
@@ -156,7 +164,7 @@ const HomePage: React.FC = () => {
                 await reloadProfiles();
             }
             setMessages([...historyUpToIndex, userMessageToResend, response]);
-            await refreshUsage(activeOrganizationId ?? undefined);
+            await refreshUsage(activeOrganization?.organization.id);
         } catch (error) {
             const errorMessage: ChatMessage = {
                 author: MessageAuthor.SYSTEM,
@@ -189,40 +197,36 @@ const HomePage: React.FC = () => {
     };
 
     const handleStartTrial = async (planId: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await startTrial(planId);
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
             return;
         }
 
-        setBillingActionLoading(true);
-        try {
-            await apiService.startTrial(planId, activeOrganizationId ?? undefined);
-            await refreshAuthState();
-            await refreshUsage(activeOrganizationId ?? undefined);
-            setMessages(prev => [
-                ...prev,
-                {
-                    author: MessageAuthor.SYSTEM,
-                    text: 'Your Pro trial is now active. Enjoy extended writing capacity and workflow automations!',
-                },
-            ]);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to start trial.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
-        }
+        setMessages(prev => [
+            ...prev,
+            {
+                author: MessageAuthor.SYSTEM,
+                text: 'Your Pro trial is now active. Enjoy extended writing capacity and workflow automations!',
+            },
+        ]);
     };
 
     const handleUpgradePlan = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await upgradePlan(planId, cadence);
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
             return;
         }
 
-        setBillingActionLoading(true);
-        try {
-            const { checkoutUrl } = await apiService.createCheckoutSession(planId, cadence, activeOrganizationId ?? undefined);
+        const checkoutUrl = result.data?.checkoutUrl;
+        if (checkoutUrl) {
             window.open(checkoutUrl, '_blank', 'noopener');
             setMessages(prev => [
                 ...prev,
@@ -231,40 +235,36 @@ const HomePage: React.FC = () => {
                     text: 'We opened a secure checkout tab so you can finalize the upgrade.',
                 },
             ]);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to start checkout session.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
         }
     };
 
     const handleOpenPortal = async () => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await openPortal();
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
             return;
         }
 
-        setBillingActionLoading(true);
-        try {
-            const { url } = await apiService.openBillingPortal(activeOrganizationId ?? undefined);
-            window.open(url, '_blank', 'noopener');
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to open billing portal.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
+        const portalUrl = result.data?.url;
+        if (portalUrl) {
+            window.open(portalUrl, '_blank', 'noopener');
         }
     };
 
     const handleOrganizationChange = async (organizationId: string) => {
-        await switchOrganization(organizationId);
+        try {
+            await switchOrganization(organizationId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to switch workspace.';
+            setMessages(prev => [
+                ...prev,
+                { author: MessageAuthor.SYSTEM, text: message },
+            ]);
+        }
     };
-
-    const activeOrganization = useMemo(
-        () => organizations.find(org => org.organization.id === activeOrganizationId) ?? organizations[0],
-        [activeOrganizationId, organizations],
-    );
 
     const headerActions = (
         <div className="flex flex-wrap items-center gap-3">
@@ -336,7 +336,7 @@ const HomePage: React.FC = () => {
                 isLoading={isLoading}
                 authState={authState}
             />
-            {isAuthModalOpen && <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />}
+            {isAuthModalOpen && <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />}
         </>
     );
 };
