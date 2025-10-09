@@ -27,6 +27,7 @@ interface ConsoleBootstrapActions {
     reloadProfiles: () => Promise<StyleProfile[]>;
     selectProfile: (profileId: string) => Promise<void>;
     switchOrganization: (organizationId: string) => Promise<void>;
+    logout: () => Promise<void>;
 }
 
 export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapActions => {
@@ -170,6 +171,11 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
         }
     }, [updateProfilesState]);
 
+    const logout = useCallback(async () => {
+        await apiService.logout();
+        await initialize();
+    }, [initialize]);
+
     useEffect(() => {
         initialize();
     }, [initialize]);
@@ -191,6 +197,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
         }),
         [
             activeOrganizationId,
@@ -207,6 +214,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
             usageSnapshot,
         ],
     );
