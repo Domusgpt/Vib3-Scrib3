@@ -27,6 +27,7 @@ interface ConsoleBootstrapActions {
     reloadProfiles: () => Promise<StyleProfile[]>;
     selectProfile: (profileId: string) => Promise<void>;
     switchOrganization: (organizationId: string) => Promise<void>;
+    logout: () => Promise<void>;
 }
 
 export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapActions => {
@@ -127,6 +128,10 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
                 ]);
             } catch (err) {
                 console.error('Failed to switch organization', err);
+                if (err instanceof Error) {
+                    throw err;
+                }
+                throw new Error('Failed to switch organization');
             }
         },
         [refreshAuthState, refreshUsage],
@@ -170,6 +175,11 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
         }
     }, [updateProfilesState]);
 
+    const logout = useCallback(async () => {
+        await apiService.logout();
+        await initialize();
+    }, [initialize]);
+
     useEffect(() => {
         initialize();
     }, [initialize]);
@@ -191,6 +201,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
         }),
         [
             activeOrganizationId,
@@ -207,6 +218,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
             usageSnapshot,
         ],
     );

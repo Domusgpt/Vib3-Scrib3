@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import WorkspaceSettings from './pages/WorkspaceSettings';
 import IntegrationsHub from './pages/IntegrationsHub';
 import InsightsCenter from './pages/InsightsCenter';
+import { ConsoleProvider } from './hooks/useConsoleContext';
 
 /**
  * Welcome to Scribe AI!
@@ -19,13 +20,15 @@ import InsightsCenter from './pages/InsightsCenter';
 const App: React.FC = () => {
     return (
         <BrowserRouter>
-            <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/workspace" element={<WorkspaceSettings />} />
-                <Route path="/integrations" element={<IntegrationsHub />} />
-                <Route path="/insights" element={<InsightsCenter />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <ConsoleProvider>
+                <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/workspace" element={<WorkspaceSettings />} />
+                    <Route path="/integrations" element={<IntegrationsHub />} />
+                    <Route path="/insights" element={<InsightsCenter />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </ConsoleProvider>
         </BrowserRouter>
     );
 };
