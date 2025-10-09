@@ -1,0 +1,12 @@
+{
+  "name": "scribe-ai-platform",
+  "version": "1.0.0",
+  "description": "A multi-provider AI platform for generating text in a user's learned writing style.",
+  "private": true,
+  "scripts": {
+    "install": "npm install --prefix server",
+    "server": "npm run dev --prefix server"
+  },
+  "author": "",
+  "license": "ISC"
+}
