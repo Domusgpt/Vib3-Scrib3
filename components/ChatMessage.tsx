@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChatMessage, MessageAuthor } from '../types';
+import { type ChatMessage, MessageAuthor } from '../types';
 import { UserIcon, BotIcon, ToolIcon, WandIcon, CheckCircleIcon, PencilIcon, ClipboardDocumentIcon, CheckIcon, XMarkIcon } from './icons';
 import Loader from './Loader';
 

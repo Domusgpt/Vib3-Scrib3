@@ -104,3 +104,33 @@ export const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
     </svg>
 );
+
+export const LightningBoltIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M13 2a1 1 0 01.832.445l8 12A1 1 0 0121 16h-7.382l1.724 5.172a1 1 0 01-1.727.949l-8-12A1 1 0 016 8h7.382l-1.724-5.172A1 1 0 0113 2z" />
+    </svg>
+);
+
+export const ChartBarIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M3.75 4.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v14.25a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75V4.5Zm6 4.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v9.75a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75V9Zm6-3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v12.75a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75V6Z" />
+    </svg>
+);
+
+export const ShieldCheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M12 2.25a.75.75 0 0 0-.34.08l-7.5 3.75A.75.75 0 0 0 3.75 6v5.25c0 6.098 4.388 9.675 7.45 10.98a.75.75 0 0 0 .6 0c3.062-1.305 7.45-4.882 7.45-10.98V6a.75.75 0 0 0-.41-.67l-7.5-3.75A.75.75 0 0 0 12 2.25Zm3.53 7.28-4.5 4.5a.75.75 0 0 1-1.06 0l-2.25-2.25a.75.75 0 1 1 1.06-1.06l1.72 1.72 3.97-3.97a.75.75 0 0 1 1.06 1.06Z" />
+    </svg>
+);
+
+export const SparklesIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M8.25 3a.75.75 0 0 1 .698.474L9.75 6h2.25a.75.75 0 0 1 .53 1.28l-1.62 1.62.768 2.303a.75.75 0 0 1-1.124.86L9 10.933l-1.604 1.13a.75.75 0 0 1-1.124-.86l.768-2.303-1.62-1.62A.75.75 0 0 1 6.75 6H9l.802-2.526A.75.75 0 0 1 8.25 3Zm7.5 3a.75.75 0 0 1 .697.474L17.25 9h2.25a.75.75 0 0 1 .53 1.28l-1.62 1.62.768 2.303a.75.75 0 0 1-1.123.86L17 13.933l-1.604 1.13a.75.75 0 0 1-1.123-.86l.767-2.303-1.62-1.62A.75.75 0 0 1 14.25 9H16.5l.803-2.526A.75.75 0 0 1 15.75 6Zm-3 6a.75.75 0 0 1 .697.474L14.25 15h2.25a.75.75 0 0 1 .53 1.28l-1.62 1.62.768 2.303a.75.75 0 0 1-1.124.86L14 19.933l-1.604 1.13a.75.75 0 0 1-1.124-.86l.768-2.303-1.62-1.62A.75.75 0 0 1 11.25 15h2.25l.803-2.526A.75.75 0 0 1 12.75 12Z" />
+    </svg>
+);
+
+export const ArrowTrendingIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M3 16.5a.75.75 0 0 0 1.5 0v-8.69l6.22 6.22a.75.75 0 0 0 1.06 0L17.5 8.31V12a.75.75 0 0 0 1.5 0V6.75A.75.75 0 0 0 18.25 6h-5.25a.75.75 0 0 0 0 1.5h3.44l-5.69 5.69-6.47-6.47A.75.75 0 0 0 3 7.5v9Z" />
+    </svg>
+);
