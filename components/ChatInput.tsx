@@ -26,18 +26,17 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
     }
 
     return (
-        <div className="p-4 bg-slate-900/50 border-t border-slate-700">
-            <form onSubmit={handleSubmit} className="flex items-center space-x-3">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_18px_38px_rgba(15,23,42,0.45)] backdrop-blur">
+            <form onSubmit={handleSubmit} className="flex items-end gap-3">
                 <textarea
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={e => setText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask your scribe to analyze text or write something for you..."
-                    className="flex-1 p-3 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 resize-none custom-scrollbar disabled:opacity-50"
+                    placeholder="Ask your scribe to analyze text or orchestrate a new workflow..."
+                    className="custom-scrollbar min-h-[56px] max-h-60 flex-1 resize-none rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50"
                     disabled={isLoading}
                     rows={1}
-                    style={{ minHeight: '44px', maxHeight: '200px' }}
-                    onInput={(e) => {
+                    onInput={e => {
                         const target = e.target as HTMLTextAreaElement;
                         target.style.height = 'auto';
                         target.style.height = `${target.scrollHeight}px`;
@@ -46,10 +45,10 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
                 <button
                     type="submit"
                     disabled={isLoading || !text.trim()}
-                    className="flex-shrink-0 w-11 h-11 flex items-center justify-center bg-indigo-600 text-white font-semibold rounded-full shadow-md hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-110 disabled:scale-100"
+                    className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-indigo-500/60 bg-indigo-500/80 text-white shadow-[0_12px_24px_rgba(79,70,229,0.45)] transition hover:scale-105 hover:bg-indigo-500 disabled:border-white/10 disabled:bg-slate-700"
                     aria-label="Send message"
                 >
-                    {isLoading ? <Loader className="w-5 h-5" /> : <SendIcon className="w-5 h-5" />}
+                    {isLoading ? <Loader className="h-5 w-5" /> : <SendIcon className="h-5 w-5" />}
                 </button>
             </form>
         </div>
