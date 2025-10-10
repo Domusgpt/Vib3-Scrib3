@@ -6,9 +6,9 @@ interface BillingSummaryProps {
     authState: AuthState;
     plans: BillingPlan[];
     usage: UsageSnapshot | null;
-    onStartTrial: (planId: string) => void;
-    onUpgrade: (planId: string, cadence: 'monthly' | 'yearly') => void;
-    onOpenPortal: () => void;
+    onStartTrial: (planId: string) => void | Promise<void>;
+    onUpgrade: (planId: string, cadence: 'monthly' | 'yearly') => void | Promise<void>;
+    onOpenPortal: () => void | Promise<void>;
     isActionLoading: boolean;
 }
 
@@ -71,7 +71,11 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
         if (!subscription) {
             return (
                 <button
-                    onClick={() => proPlan && onStartTrial(proPlan.id)}
+                    onClick={() => {
+                        if (proPlan) {
+                            void onStartTrial(proPlan.id);
+                        }
+                    }}
                     className={primaryActionClass}
                     disabled={isActionLoading || !proPlan}
                 >
@@ -83,7 +87,11 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
         if (subscription.status === 'trialing') {
             return (
                 <button
-                    onClick={() => proPlan && onUpgrade(proPlan.id, 'monthly')}
+                    onClick={() => {
+                        if (proPlan) {
+                            void onUpgrade(proPlan.id, 'monthly');
+                        }
+                    }}
                     className={`${primaryActionClass} border-amber-400/60 bg-amber-500/80 hover:bg-amber-500`}
                     disabled={isActionLoading || !proPlan}
                 >
@@ -94,7 +102,9 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
 
         return (
             <button
-                onClick={onOpenPortal}
+                onClick={() => {
+                    void onOpenPortal();
+                }}
                 className={subtleActionClass}
                 disabled={isActionLoading}
             >
