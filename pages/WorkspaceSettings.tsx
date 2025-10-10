@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BillingSummary from '../components/billing/BillingSummary';
 import NotificationBanner from '../components/workspace/NotificationBanner';
@@ -9,26 +9,23 @@ import ApiKeysSection from '../components/workspace/ApiKeysSection';
 import WebhooksSection from '../components/workspace/WebhooksSection';
 import AuditLogSection from '../components/workspace/AuditLogSection';
 import AccessPoliciesSection from '../components/workspace/AccessPoliciesSection';
-import AppShell from '../components/layout/AppShell';
-import WorkspaceSummaryBar from '../components/dashboard/WorkspaceSummaryBar';
+import ConsoleScaffold from '../components/console/ConsoleScaffold';
 import {
     ApiKeySummary,
     ApiKeyWithSecret,
     ApiScope,
     AuditLog,
-    BillingPlan,
     Invitation,
     OrganizationAuthPolicy,
     OrganizationAuthPolicyUpdate,
     OrganizationMember,
     OrganizationRole,
-    OrganizationSummary,
-    UsageSnapshot,
     WebhookEvent,
     WebhookSubscription,
-    AuthState,
 } from '../types';
 import * as apiService from '../services/apiService';
+import { useConsolePageState } from '../hooks/useConsolePageState';
+import { useConsole } from '../hooks/useConsoleContext';
 
 const AVAILABLE_SCOPES: Array<{ label: string; value: ApiScope; description: string }> = [
     { label: 'Chat: write', value: 'chat:write', description: 'Generate content and consume tokens.' },
@@ -46,13 +43,6 @@ const AVAILABLE_EVENTS: Array<{ label: string; value: WebhookEvent; description:
 ];
 
 const WorkspaceSettings: React.FC = () => {
-    const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
-    const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const selectedOrganization = useMemo(
-        () => organizations.find(org => org.organization.id === selectedOrgId) ?? organizations[0],
-        [organizations, selectedOrgId],
-    );
-
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
@@ -62,11 +52,6 @@ const WorkspaceSettings: React.FC = () => {
     const [authPolicy, setAuthPolicy] = useState<OrganizationAuthPolicy | null>(null);
     const [isAuthPolicyLoading, setIsAuthPolicyLoading] = useState(false);
     const [isUpdatingAuthPolicy, setIsUpdatingAuthPolicy] = useState(false);
-
-    const [billingPlans, setBillingPlans] = useState<BillingPlan[]>([]);
-    const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
-
-    const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
     const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
     const [isUsageLoading, setIsUsageLoading] = useState(false);
@@ -96,36 +81,60 @@ const WorkspaceSettings: React.FC = () => {
     const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
     const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
-    const [billingActionLoading, setBillingActionLoading] = useState(false);
 
     const [auditExportSince, setAuditExportSince] = useState('');
     const [isExportingAudit, setIsExportingAudit] = useState(false);
 
-    const workspaceAuthState: AuthState = useMemo(
-        () => ({
-            isAuthenticated: true,
-            user: null,
-            license: null,
-            subscription: selectedOrganization?.subscription ?? null,
-            usage: usageSnapshot,
-        }),
-        [selectedOrganization?.subscription, usageSnapshot],
-    );
+    const { refreshUsage: refreshUsageFromConsole } = useConsole();
+    const billingOrganizationRef = useRef<string | null>(null);
 
     const refreshUsage = useCallback(
-        async (organizationId: string) => {
+        async (organizationId?: string) => {
+            const targetOrganizationId = organizationId ?? billingOrganizationRef.current;
+            if (!targetOrganizationId) {
+                return;
+            }
             setIsUsageLoading(true);
             try {
-                const usage = await apiService.getUsage(organizationId);
-                setUsageSnapshot(usage);
-            } catch (err) {
-                console.error(err);
-                setUsageSnapshot(null);
+                await refreshUsageFromConsole(targetOrganizationId);
             } finally {
                 setIsUsageLoading(false);
             }
         },
-        [],
+        [refreshUsageFromConsole],
+    );
+
+    const consoleState = useConsolePageState({
+        autoOpenAuthModal: true,
+        refreshUsage,
+    });
+
+    const {
+        authState,
+        billingPlans,
+        usageSnapshot,
+        organizations,
+        activeOrganization,
+        refreshAuthState,
+        switchOrganization,
+        isBootstrapping,
+        billingActions,
+        requireAuthentication,
+    } = consoleState;
+
+    const selectedOrganization = activeOrganization ?? organizations[0] ?? null;
+    const selectedOrganizationId = selectedOrganization?.organization.id ?? null;
+
+    useEffect(() => {
+        billingOrganizationRef.current = selectedOrganizationId;
+    }, [selectedOrganizationId]);
+
+    const { isLoading: billingActionLoading, startTrial, upgradePlan, openPortal } = billingActions;
+
+    const guardWithAuth = useCallback(
+        <Args extends unknown[], ReturnType>(action: (...args: Args) => ReturnType) =>
+            requireAuthentication(action, { openModal: true }),
+        [requireAuthentication],
     );
 
     const loadOrganizationDetail = useCallback(
@@ -161,42 +170,11 @@ const WorkspaceSettings: React.FC = () => {
         [refreshUsage],
     );
 
-    const loadOrganizations = useCallback(async () => {
-        setLoading(true);
-        try {
-            const response = await apiService.getOrganizations();
-            setOrganizations(response.organizations);
-            setSelectedOrgId(response.activeOrganizationId ?? response.organizations[0]?.organization.id ?? null);
-            setError(null);
-        } catch (err) {
-            console.error(err);
-            setError('Failed to load organizations.');
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (selectedOrganizationId && authState.isAuthenticated) {
+            void loadOrganizationDetail(selectedOrganizationId);
         }
-    }, []);
-
-    useEffect(() => {
-        loadOrganizations();
-    }, [loadOrganizations]);
-
-    useEffect(() => {
-        if (selectedOrganization) {
-            loadOrganizationDetail(selectedOrganization.organization.id);
-        }
-    }, [loadOrganizationDetail, selectedOrganization]);
-
-    useEffect(() => {
-        const fetchPlans = async () => {
-            try {
-                const plans = await apiService.getBillingPlans();
-                setBillingPlans(plans);
-            } catch (err) {
-                console.error('Failed to load billing plans', err);
-            }
-        };
-        fetchPlans();
-    }, []);
+    }, [authState.isAuthenticated, loadOrganizationDetail, selectedOrganizationId]);
 
     useEffect(() => {
         if (!notification) return;
@@ -204,23 +182,24 @@ const WorkspaceSettings: React.FC = () => {
         return () => window.clearTimeout(timeout);
     }, [notification]);
 
-    const handleSwitchOrganization = async (organizationId: string) => {
+    const handleSwitchOrganization = guardWithAuth(async (organizationId: string) => {
         setError(null);
         setNotification(null);
         setIsSwitchingOrg(true);
+        setIsUsageLoading(true);
         try {
-            await apiService.setActiveOrganization(organizationId);
-            setSelectedOrgId(organizationId);
+            await switchOrganization(organizationId);
             setNotification({ type: 'info', message: 'Workspace switched.' });
         } catch (err) {
             console.error(err);
-            setError('Unable to switch workspace.');
+            setError(err instanceof Error ? err.message : 'Unable to switch workspace.');
         } finally {
             setIsSwitchingOrg(false);
+            setIsUsageLoading(false);
         }
-    };
+    });
 
-    const handleInvite = async () => {
+    const handleInvite = guardWithAuth(async () => {
         if (!selectedOrganization || !inviteEmail) return;
         setError(null);
         setNotification(null);
@@ -270,9 +249,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsInviting(false);
         }
-    };
+    });
 
-    const handleCreateApiKey = async () => {
+    const handleCreateApiKey = guardWithAuth(async () => {
         if (!selectedOrganization || !apiKeyName) return;
         setCreatingApiKey(true);
         setError(null);
@@ -330,9 +309,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setCreatingApiKey(false);
         }
-    };
+    });
 
-    const handleCreateWebhook = async () => {
+    const handleCreateWebhook = guardWithAuth(async () => {
         if (!selectedOrganization || !webhookUrl) return;
         setCreatingWebhook(true);
         setError(null);
@@ -353,9 +332,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setCreatingWebhook(false);
         }
-    };
+    });
 
-    const handleSaveAuthPolicy = async (payload: OrganizationAuthPolicyUpdate) => {
+    const handleSaveAuthPolicy = guardWithAuth(async (payload: OrganizationAuthPolicyUpdate) => {
         if (!selectedOrganization) return;
         setIsUpdatingAuthPolicy(true);
         setError(null);
@@ -370,17 +349,24 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsUpdatingAuthPolicy(false);
         }
-    };
+    });
 
-    const handleCreateWorkspace = async () => {
+    const handleCreateWorkspace = guardWithAuth(async () => {
         if (!newWorkspaceName.trim()) return;
         setIsCreatingWorkspace(true);
         setError(null);
         setNotification(null);
         try {
             const summary = await apiService.createOrganization(newWorkspaceName.trim());
-            await loadOrganizations();
-            setSelectedOrgId(summary.organization.id);
+            await refreshAuthState();
+            if (summary?.organization?.id) {
+                setIsUsageLoading(true);
+                try {
+                    await switchOrganization(summary.organization.id);
+                } finally {
+                    setIsUsageLoading(false);
+                }
+            }
             setNewWorkspaceName('');
             setNotification({ type: 'success', message: 'Workspace created.' });
         } catch (err) {
@@ -389,9 +375,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsCreatingWorkspace(false);
         }
-    };
+    });
 
-    const handleRevokeInvitation = async (invitationId: string) => {
+    const handleRevokeInvitation = guardWithAuth(async (invitationId: string) => {
         if (!selectedOrganization) return;
         if (!window.confirm('Revoke this invitation? The invite link will no longer work.')) {
             return;
@@ -409,9 +395,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setRevokingInvitationId(null);
         }
-    };
+    });
 
-    const handleRevokeApiKey = async (keyId: string) => {
+    const handleRevokeApiKey = guardWithAuth(async (keyId: string) => {
         if (!selectedOrganization) return;
         if (!window.confirm('Revoke this API key? Applications using it will immediately lose access.')) {
             return;
@@ -429,9 +415,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setRevokingApiKeyId(null);
         }
-    };
+    });
 
-    const handleExportAuditLog = async () => {
+    const handleExportAuditLog = guardWithAuth(async () => {
         if (!selectedOrganization) return;
         setIsExportingAudit(true);
         setError(null);
@@ -459,9 +445,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsExportingAudit(false);
         }
-    };
+    });
 
-    const handleDeleteWebhook = async (webhookId: string) => {
+    const handleDeleteWebhook = guardWithAuth(async (webhookId: string) => {
         if (!selectedOrganization) return;
         if (!window.confirm('Delete this webhook endpoint? Events will stop sending immediately.')) {
             return;
@@ -479,9 +465,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setDeletingWebhookId(null);
         }
-    };
+    });
 
-    const handleTestWebhook = async (webhookId: string) => {
+    const handleTestWebhook = guardWithAuth(async (webhookId: string) => {
         if (!selectedOrganization) return;
         setError(null);
         setNotification(null);
@@ -512,9 +498,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setTestingWebhookId(null);
         }
-    };
+    });
 
-    const handleChangeMemberRole = async (memberId: string, role: OrganizationRole) => {
+    const handleChangeMemberRole = guardWithAuth(async (memberId: string, role: OrganizationRole) => {
         if (!selectedOrganization) return;
         setError(null);
         setNotification(null);
@@ -535,9 +521,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setUpdatingMemberId(null);
         }
-    };
+    });
 
-    const handleRemoveMember = async (memberId: string) => {
+    const handleRemoveMember = guardWithAuth(async (memberId: string) => {
         if (!selectedOrganization) return;
         if (!window.confirm('Remove this member from the workspace?')) {
             return;
@@ -555,67 +541,70 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setRemovingMemberId(null);
         }
-    };
+    });
 
-    const handleStartTrial = async (planId: string) => {
+    const handleStartTrial = guardWithAuth(async (planId: string) => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            await apiService.startTrial(planId, selectedOrganization.organization.id);
-            await refreshUsage(selectedOrganization.organization.id);
-            setNotification({ type: 'success', message: 'Trial started for this workspace.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to start a trial.');
-        } finally {
-            setBillingActionLoading(false);
+        const result = await startTrial(planId, { organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
         }
-    };
+        if (result.status === 'error') {
+            console.error(result.message);
+            setError('Unable to start a trial.');
+            return;
+        }
+        if (result.status === 'success') {
+            setNotification({ type: 'success', message: 'Trial started for this workspace.' });
+        }
+    });
 
-    const handleUpgrade = async (planId: string, cadence: 'monthly' | 'yearly') => {
+    const handleUpgrade = guardWithAuth(async (planId: string, cadence: 'monthly' | 'yearly') => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            const session = await apiService.createCheckoutSession(
-                planId,
-                cadence,
-                selectedOrganization.organization.id,
-            );
-            if (session?.checkoutUrl) {
-                window.open(session.checkoutUrl, '_blank', 'noopener');
+        const result = await upgradePlan(planId, cadence, { organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            console.error(result.message);
+            setError('Unable to start checkout.');
+            return;
+        }
+        if (result.status === 'success') {
+            const checkoutUrl = result.data?.checkoutUrl;
+            if (checkoutUrl) {
+                window.open(checkoutUrl, '_blank', 'noopener');
                 setNotification({ type: 'info', message: 'Checkout opened in a new tab.' });
             }
-        } catch (err) {
-            console.error(err);
-            setError('Unable to start checkout.');
-        } finally {
-            setBillingActionLoading(false);
         }
-    };
+    });
 
-    const handleOpenPortal = async () => {
+    const handleOpenPortal = guardWithAuth(async () => {
         if (!selectedOrganization) return;
-        setBillingActionLoading(true);
         setError(null);
         setNotification(null);
-        try {
-            const portal = await apiService.openBillingPortal(selectedOrganization.organization.id);
-            if (portal?.url) {
-                window.open(portal.url, '_blank', 'noopener');
-            }
-        } catch (err) {
-            console.error(err);
-            setError('Unable to open billing portal.');
-        } finally {
-            setBillingActionLoading(false);
+        const result = await openPortal({ organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
+            return;
         }
-    };
+        if (result.status === 'error') {
+            console.error(result.message);
+            setError('Unable to open billing portal.');
+            return;
+        }
+        if (result.status === 'success') {
+            const portalUrl = result.data?.url;
+            if (portalUrl) {
+                window.open(portalUrl, '_blank', 'noopener');
+            }
+        }
+    });
 
-    if (loading && organizations.length === 0) {
+    if (isBootstrapping && organizations.length === 0) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-[#05070f] text-slate-300">
                 <p className="text-xs font-semibold uppercase tracking-[0.45em] text-indigo-200/80">
@@ -639,32 +628,33 @@ const WorkspaceSettings: React.FC = () => {
     );
 
     return (
-        <AppShell
+        <ConsoleScaffold
+            state={consoleState}
             eyebrow="Operations"
             title="Workspace command center"
             description="Administer organizations, rotate credentials, and monitor automations with a Nimbus Guardian inspired interface."
             actions={headerActions}
-            headerContent={
-                <WorkspaceSummaryBar
-                    organization={selectedOrganization}
-                    usage={usageSnapshot}
-                    isLoading={loading || detailLoading || isUsageLoading}
-                />
-            }
+            summaryOrganization={selectedOrganization}
+            summaryUsage={usageSnapshot}
+            summaryLoading={isBootstrapping || detailLoading || isUsageLoading}
+            banner={(
+                <>
+                    {error && <NotificationBanner type="error" message={error} onDismiss={() => setError(null)} />}
+                    {notification && (
+                        <NotificationBanner
+                            type={notification.type}
+                            message={notification.message}
+                            onDismiss={() => setNotification(null)}
+                        />
+                    )}
+                </>
+            )}
+            showSidebar={false}
         >
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 sm:px-10">
-                {error && <NotificationBanner type="error" message={error} onDismiss={() => setError(null)} />}
-                {notification && (
-                    <NotificationBanner
-                        type={notification.type}
-                        message={notification.message}
-                        onDismiss={() => setNotification(null)}
-                    />
-                )}
-
                 <WorkspaceHeader
                     organizations={organizations}
-                    selectedOrganization={selectedOrganization}
+                    selectedOrganization={selectedOrganization ?? undefined}
                     isSwitching={isSwitchingOrg}
                     newWorkspaceName={newWorkspaceName}
                     onWorkspaceNameChange={setNewWorkspaceName}
@@ -745,7 +735,7 @@ const WorkspaceSettings: React.FC = () => {
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <BillingSummary
-                        authState={workspaceAuthState}
+                        authState={authState}
                         plans={billingPlans}
                         usage={usageSnapshot}
                         onStartTrial={handleStartTrial}
@@ -763,7 +753,7 @@ const WorkspaceSettings: React.FC = () => {
                     />
                 </div>
             </div>
-        </AppShell>
+        </ConsoleScaffold>
     );
 };
 
