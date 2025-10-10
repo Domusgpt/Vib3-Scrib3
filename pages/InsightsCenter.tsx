@@ -10,7 +10,7 @@ import IncidentTimeline from '../components/insights/IncidentTimeline';
 import RecommendationsPanel from '../components/insights/RecommendationsPanel';
 import { IncidentInsight, IntegrationName, UsageTrendPoint, WorkspacePulse } from '../types';
 import * as apiService from '../services/apiService';
-import { useConsoleBootstrap } from '../hooks/useConsoleBootstrap';
+import { useConsolePageState } from '../hooks/useConsolePageState';
 
 const InsightsCenter: React.FC = () => {
     const {
@@ -19,16 +19,20 @@ const InsightsCenter: React.FC = () => {
         usageSnapshot,
         organizations,
         activeOrganizationId,
+        activeOrganization,
         profiles,
         activeProfileId,
         isBootstrapping,
-        initialize,
         refreshAuthState,
         refreshUsage,
         selectProfile,
         switchOrganization,
         error: bootstrapError,
-    } = useConsoleBootstrap();
+        logout,
+        billingActions,
+        authModal,
+        requireAuth,
+    } = useConsolePageState({ autoOpenAuthModal: true });
 
     const [pulse, setPulse] = useState<WorkspacePulse | null>(null);
     const [trend, setTrend] = useState<UsageTrendPoint[]>([]);
@@ -38,10 +42,15 @@ const InsightsCenter: React.FC = () => {
     const [isTrendLoading, setTrendLoading] = useState(false);
     const [isIncidentLoading, setIncidentLoading] = useState(false);
     const [isRefreshing, setRefreshing] = useState(false);
-    const [isBillingActionLoading, setBillingActionLoading] = useState(false);
-    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+    const {
+        isLoading: isBillingActionLoading,
+        startTrial,
+        upgradePlan,
+        openPortal,
+    } = billingActions;
+    const { isOpen: isAuthModalOpen, close: closeAuthModal } = authModal;
 
-    const organizationId = activeOrganizationId ?? organizations[0]?.organization.id;
+    const organizationId = activeOrganization?.organization.id;
 
     const loadPulse = useCallback(
         async (orgId?: string) => {
@@ -142,6 +151,9 @@ const InsightsCenter: React.FC = () => {
     }, [authState.isAuthenticated, isBootstrapping, loadAll, organizationId]);
 
     const handleDisconnect = async (integration: IntegrationName) => {
+        if (!requireAuth()) {
+            return;
+        }
         try {
             await apiService.disconnectIntegration(integration);
             await refreshAuthState();
@@ -157,6 +169,9 @@ const InsightsCenter: React.FC = () => {
     };
 
     const handleProfileSelect = async (id: string) => {
+        if (!requireAuth()) {
+            return;
+        }
         await selectProfile(id);
         const profileName = profiles.find(profile => profile.id === id)?.name ?? 'profile';
         setBanner({ type: 'info', message: `Active style updated to ${profileName}.` });
@@ -167,74 +182,75 @@ const InsightsCenter: React.FC = () => {
     };
 
     const handleStartTrial = async (planId: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await startTrial(planId, { organizationId });
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            await apiService.startTrial(planId, organizationId);
-            await refreshAuthState();
-            await refreshUsage(organizationId);
-            setBanner({ type: 'success', message: 'Trial activated successfully.' });
-        } catch (error) {
+        if (result.status === 'error') {
             setBanner({
                 type: 'error',
-                message: error instanceof Error ? error.message : 'Unable to start trial.',
+                message: result.message,
             });
-        } finally {
-            setBillingActionLoading(false);
+            return;
         }
+        setBanner({ type: 'success', message: 'Trial activated successfully.' });
     };
 
     const handleUpgradePlan = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await upgradePlan(planId, cadence, { organizationId });
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { checkoutUrl } = await apiService.createCheckoutSession(planId, cadence, organizationId);
-            window.open(checkoutUrl, '_blank', 'noopener');
-            setBanner({ type: 'info', message: 'Checkout opened in a new tab.' });
-        } catch (error) {
+        if (result.status === 'error') {
             setBanner({
                 type: 'error',
-                message: error instanceof Error ? error.message : 'Unable to start checkout session.',
+                message: result.message,
             });
-        } finally {
-            setBillingActionLoading(false);
+            return;
+        }
+        const checkoutUrl = result.data?.checkoutUrl;
+        if (checkoutUrl) {
+            window.open(checkoutUrl, '_blank', 'noopener');
+            setBanner({ type: 'info', message: 'Checkout opened in a new tab.' });
         }
     };
 
     const handleOpenPortal = async () => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await openPortal({ organizationId });
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { url } = await apiService.openBillingPortal(organizationId);
-            window.open(url, '_blank', 'noopener');
-        } catch (error) {
+        if (result.status === 'error') {
             setBanner({
                 type: 'error',
-                message: error instanceof Error ? error.message : 'Unable to open billing portal.',
+                message: result.message,
             });
-        } finally {
-            setBillingActionLoading(false);
+            return;
+        }
+        const portalUrl = result.data?.url;
+        if (portalUrl) {
+            window.open(portalUrl, '_blank', 'noopener');
         }
     };
 
     const handleLogout = async () => {
-        await apiService.logout();
-        await initialize();
+        await logout();
         setBanner({ type: 'info', message: 'You have been signed out.' });
     };
 
     const handleOrganizationChange = async (id: string) => {
-        await switchOrganization(id);
-        await loadAll(id);
+        if (!requireAuth()) {
+            return;
+        }
+        try {
+            await switchOrganization(id);
+            await loadAll(id);
+        } catch (error) {
+            setBanner({
+                type: 'error',
+                message: error instanceof Error ? error.message : 'Unable to switch workspace.',
+            });
+        }
     };
 
     const actions = useMemo(
@@ -282,7 +298,7 @@ const InsightsCenter: React.FC = () => {
                 {banner && <NotificationBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />}
 
                 <WorkspaceSummaryBar
-                    organization={organizations.find(org => org.organization.id === organizationId)}
+                    organization={activeOrganization}
                     usage={usageSnapshot}
                     isLoading={isBootstrapping}
                 />
@@ -300,7 +316,7 @@ const InsightsCenter: React.FC = () => {
                 <IncidentTimeline incidents={incidents} isLoading={isIncidentLoading || isBootstrapping} />
             </div>
 
-            <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+            <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />
         </AppShell>
     );
 };
