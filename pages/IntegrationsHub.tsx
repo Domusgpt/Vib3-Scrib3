@@ -1,31 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Sidebar from '../components/Sidebar';
-import AppShell from '../components/layout/AppShell';
+import ConsoleScaffold from '../components/console/ConsoleScaffold';
 import WorkspaceSummaryBar from '../components/dashboard/WorkspaceSummaryBar';
 import IntegrationSummaryGrid from '../components/integrations/IntegrationSummaryGrid';
 import NotificationBanner from '../components/workspace/NotificationBanner';
-import AuthModal from '../components/AuthModal';
 import { IntegrationName, IntegrationSummary } from '../types';
 import * as apiService from '../services/apiService';
-import { useConsoleBootstrap } from '../hooks/useConsoleBootstrap';
+import { useConsolePageState } from '../hooks/useConsolePageState';
 
 const IntegrationsHub: React.FC = () => {
+    const consoleState = useConsolePageState({ autoOpenAuthModal: true });
+
     const {
         authState,
         billingPlans,
         usageSnapshot,
         organizations,
         activeOrganizationId,
+        activeOrganization,
         profiles,
         activeProfileId,
         isBootstrapping,
-        initialize,
         refreshAuthState,
         refreshUsage,
         selectProfile,
         switchOrganization,
         error: bootstrapError,
-    } = useConsoleBootstrap();
+        logout,
+        billingActions,
+    } = consoleState;
 
     const [integrationSummaries, setIntegrationSummaries] = useState<IntegrationSummary[]>([]);
     const [isOverviewLoading, setOverviewLoading] = useState(false);
@@ -34,9 +36,8 @@ const IntegrationsHub: React.FC = () => {
     const [pendingAction, setPendingAction] = useState<'connect' | 'disconnect' | 'sync' | null>(null);
     const [banner, setBanner] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
     const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
-    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-    const [isBillingActionLoading, setBillingActionLoading] = useState(false);
     const [isSeedingSandbox, setSeedingSandbox] = useState(false);
+    const { isLoading: isBillingActionLoading, startTrial, upgradePlan, openPortal } = billingActions;
 
     const loadOverview = useCallback(async () => {
         if (!authState.isAuthenticated) {
@@ -129,65 +130,63 @@ const IntegrationsHub: React.FC = () => {
     };
 
     const handleStartTrial = async (planId: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await startTrial(planId);
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            await apiService.startTrial(planId, activeOrganizationId ?? undefined);
-            await refreshAuthState();
-            await refreshUsage(activeOrganizationId ?? undefined);
-            setBanner({ type: 'success', message: 'Trial activated. Enjoy the expanded automation capacity.' });
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to start trial.' });
-        } finally {
-            setBillingActionLoading(false);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
         }
+        setBanner({ type: 'success', message: 'Trial activated. Enjoy the expanded automation capacity.' });
     };
 
     const handleUpgradePlan = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await upgradePlan(planId, cadence);
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { checkoutUrl } = await apiService.createCheckoutSession(planId, cadence, activeOrganizationId ?? undefined);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
+        }
+        const checkoutUrl = result.data?.checkoutUrl;
+        if (checkoutUrl) {
             window.open(checkoutUrl, '_blank', 'noopener');
             setBanner({ type: 'info', message: 'Checkout opened in a new tab.' });
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to start checkout session.' });
-        } finally {
-            setBillingActionLoading(false);
         }
     };
 
     const handleOpenPortal = async () => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await openPortal();
+        if (result.status === 'requires-auth') {
             return;
         }
-        setBillingActionLoading(true);
-        try {
-            const { url } = await apiService.openBillingPortal(activeOrganizationId ?? undefined);
-            window.open(url, '_blank', 'noopener');
-        } catch (error) {
-            setBanner({ type: 'error', message: error instanceof Error ? error.message : 'Unable to open billing portal.' });
-        } finally {
-            setBillingActionLoading(false);
+        if (result.status === 'error') {
+            setBanner({ type: 'error', message: result.message });
+            return;
+        }
+        const portalUrl = result.data?.url;
+        if (portalUrl) {
+            window.open(portalUrl, '_blank', 'noopener');
         }
     };
 
     const handleLogout = async () => {
-        await apiService.logout();
-        await initialize();
+        await logout();
         setBanner({ type: 'info', message: 'You have been signed out.' });
     };
 
     const handleOrganizationChange = async (organizationId: string) => {
-        await switchOrganization(organizationId);
-        await loadOverview();
+        try {
+            await switchOrganization(organizationId);
+            await loadOverview();
+        } catch (error) {
+            setBanner({
+                type: 'error',
+                message: error instanceof Error ? error.message : 'Unable to switch workspace.',
+            });
+        }
     };
 
     const handleSeedSandbox = async () => {
@@ -215,11 +214,6 @@ const IntegrationsHub: React.FC = () => {
             setSeedingSandbox(false);
         }
     };
-
-    const activeOrganization = useMemo(
-        () => organizations.find(org => org.organization.id === activeOrganizationId) ?? organizations[0],
-        [activeOrganizationId, organizations],
-    );
 
     const sandboxSeededAt = useMemo(() => {
         const metadata = (activeOrganization?.organization.metadata ?? {}) as Record<string, unknown>;
@@ -268,70 +262,60 @@ const IntegrationsHub: React.FC = () => {
     const description = 'Link email, social, and upcoming messaging channels to unify tone, accelerate onboarding, and power downstream automations.';
 
     return (
-        <>
-            <AppShell
-                sidebar={
-                    <Sidebar
-                        authState={authState}
-                        profiles={profiles}
-                        activeProfileId={activeProfileId}
-                        onProfileSelect={handleProfileSelect}
-                        onProfileCreate={handleProfileCreate}
-                        onLogout={handleLogout}
-                        onDisconnect={disconnectIntegration}
-                        billingPlans={billingPlans}
-                        usage={usageSnapshot}
-                        onStartTrial={handleStartTrial}
-                        onUpgrade={handleUpgradePlan}
-                        onOpenPortal={handleOpenPortal}
-                        isBillingActionLoading={isBillingActionLoading}
-                        organizations={organizations}
-                        activeOrganizationId={activeOrganizationId}
-                        onOrganizationChange={handleOrganizationChange}
+        <ConsoleScaffold
+            state={consoleState}
+            eyebrow={eyebrow}
+            title={title}
+            description={description}
+            headerContent={headerContent}
+            sidebarOverrides={{
+                onProfileSelect: handleProfileSelect,
+                onProfileCreate: handleProfileCreate,
+                onLogout: handleLogout,
+                onDisconnect: disconnectIntegration,
+                onStartTrial: handleStartTrial,
+                onUpgrade: handleUpgradePlan,
+                onOpenPortal: handleOpenPortal,
+                onOrganizationChange: handleOrganizationChange,
+            }}
+        >
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 sm:px-10">
+                {bootstrapError && <NotificationBanner type="error" message={bootstrapError} />}
+                {banner && (
+                    <NotificationBanner
+                        type={banner.type}
+                        message={banner.message}
+                        onDismiss={() => setBanner(null)}
                     />
-                }
-                eyebrow={eyebrow}
-                title={title}
-                description={description}
-                headerContent={headerContent}
-            >
-                <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 sm:px-10">
-                    {bootstrapError && <NotificationBanner type="error" message={bootstrapError} />}
-                    {banner && (
-                        <NotificationBanner
-                            type={banner.type}
-                            message={banner.message}
-                            onDismiss={() => setBanner(null)}
-                        />
+                )}
+                {overviewError && (
+                    <NotificationBanner type="error" message={overviewError} onDismiss={() => setOverviewError(null)} />
+                )}
+                {activeOrganization && (
+                    <SandboxCallout
+                        seededAt={sandboxSeededAt}
+                        onGenerate={handleSeedSandbox}
+                        isGenerating={isSeedingSandbox}
+                        canGenerate={canGenerateSandbox}
+                    />
+                )}
+                <div className={`rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_32px_60px_rgba(8,15,35,0.55)] backdrop-blur ${isOverviewLoading ? 'animate-pulse' : ''}`}>
+                    <IntegrationSummaryGrid
+                        integrations={integrationSummaries}
+                        onConnect={handleConnect}
+                        onDisconnect={disconnectIntegration}
+                        onSync={handleSync}
+                        pendingIntegration={pendingIntegration}
+                        pendingAction={pendingAction ?? undefined}
+                    />
+                    {integrationSummaries.length === 0 && !isOverviewLoading && (
+                        <p className="mt-6 text-center text-sm text-slate-400">
+                            No integrations yet. Connect Gmail or Facebook to start training the corpus.
+                        </p>
                     )}
-                    {overviewError && <NotificationBanner type="error" message={overviewError} onDismiss={() => setOverviewError(null)} />}
-                    {activeOrganization && (
-                        <SandboxCallout
-                            seededAt={sandboxSeededAt}
-                            onGenerate={handleSeedSandbox}
-                            isGenerating={isSeedingSandbox}
-                            canGenerate={canGenerateSandbox}
-                        />
-                    )}
-                    <div className={`rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_32px_60px_rgba(8,15,35,0.55)] backdrop-blur ${isOverviewLoading ? 'animate-pulse' : ''}`}>
-                        <IntegrationSummaryGrid
-                            integrations={integrationSummaries}
-                            onConnect={handleConnect}
-                            onDisconnect={disconnectIntegration}
-                            onSync={handleSync}
-                            pendingIntegration={pendingIntegration}
-                            pendingAction={pendingAction ?? undefined}
-                        />
-                        {integrationSummaries.length === 0 && !isOverviewLoading && (
-                            <p className="mt-6 text-center text-sm text-slate-400">
-                                No integrations yet. Connect Gmail or Facebook to start training the corpus.
-                            </p>
-                        )}
-                    </div>
                 </div>
-            </AppShell>
-            {isAuthModalOpen && <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />}
-        </>
+            </div>
+        </ConsoleScaffold>
     );
 };
 
