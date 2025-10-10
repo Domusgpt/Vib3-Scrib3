@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-// FIX: Added IntegrationName to import.
 import {
     AuthState,
     Integration,
@@ -29,19 +28,19 @@ interface SidebarProps {
     authState: AuthState;
     profiles: StyleProfile[];
     activeProfileId: string | null;
-    onProfileSelect: (id: string) => void;
-    onProfileCreate: () => void;
-    onLogout: () => void;
-    onDisconnect: (integration: IntegrationName) => void;
+    onProfileSelect: (id: string) => void | Promise<void>;
+    onProfileCreate: () => void | Promise<void>;
+    onLogout: () => void | Promise<void>;
+    onDisconnect: (integration: IntegrationName) => void | Promise<void>;
     billingPlans: BillingPlan[];
     usage: UsageSnapshot | null;
-    onStartTrial: (planId: string) => void;
-    onUpgrade: (planId: string, cadence: 'monthly' | 'yearly') => void;
-    onOpenPortal: () => void;
+    onStartTrial: (planId: string) => void | Promise<void>;
+    onUpgrade: (planId: string, cadence: 'monthly' | 'yearly') => void | Promise<void>;
+    onOpenPortal: () => void | Promise<void>;
     isBillingActionLoading: boolean;
     organizations: OrganizationSummary[];
     activeOrganizationId: string | null;
-    onOrganizationChange: (organizationId: string) => void;
+    onOrganizationChange: (organizationId: string) => void | Promise<void>;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -108,7 +107,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         </div>
                         <button
-                            onClick={onLogout}
+                            onClick={() => {
+                                void onLogout();
+                            }}
                             title="Logout"
                             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:bg-white/10 hover:text-white"
                         >
@@ -132,7 +133,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <select
                         value={activeOrg?.organization.id ?? ''}
-                        onChange={event => onOrganizationChange(event.target.value)}
+                        onChange={event => {
+                            void onOrganizationChange(event.target.value);
+                        }}
                         className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                     >
                         {organizations.map(org => (
@@ -186,7 +189,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                             name={int.name}
                             connected={int.connected}
                             onConnect={() => handleLogin(int.name as 'google' | 'facebook')}
-                            onDisconnect={() => onDisconnect(int.name)}
+                            onDisconnect={() => {
+                                void onDisconnect(int.name);
+                            }}
                         />
                     ))}
                 </div>
@@ -210,13 +215,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 key={profile.id}
                                 profile={profile}
                                 isActive={profile.id === activeProfileId}
-                                onSelect={() => onProfileSelect(profile.id)}
+                                onSelect={() => {
+                                    void onProfileSelect(profile.id);
+                                }}
                             />
                         ))}
                     </div>
                 </div>
                 <button
-                    onClick={onProfileCreate}
+                    onClick={() => {
+                        void onProfileCreate();
+                    }}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-indigo-500/80 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500/70 disabled:border-white/5 disabled:bg-slate-700/70"
                     disabled={!isAuthenticated}
                 >
@@ -241,8 +250,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 const IntegrationButton: React.FC<{
     name: IntegrationName;
     connected: boolean;
-    onConnect: () => void;
-    onDisconnect: () => void;
+    onConnect: () => void | Promise<void>;
+    onDisconnect: () => void | Promise<void>;
 }> = ({ name, connected, onConnect, onDisconnect }) => {
     const Icon = name === 'google' ? GmailIcon : FacebookIcon;
     const label = name === 'google' ? 'Google' : 'Facebook';
@@ -260,7 +269,9 @@ const IntegrationButton: React.FC<{
                         Live
                     </span>
                     <button
-                        onClick={onDisconnect}
+                        onClick={() => {
+                            void onDisconnect();
+                        }}
                         className="text-slate-500 transition hover:text-red-300"
                     >
                         Disconnect
@@ -268,7 +279,9 @@ const IntegrationButton: React.FC<{
                 </div>
             ) : (
                 <button
-                    onClick={onConnect}
+                    onClick={() => {
+                        void onConnect();
+                    }}
                     className="rounded-full border border-indigo-500/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-indigo-200 transition hover:bg-indigo-500/20"
                 >
                     Connect

@@ -8,10 +8,10 @@ interface WebhooksSectionProps {
     onToggleEvent: (event: WebhookEvent) => void;
     url: string;
     onUrlChange: (value: string) => void;
-    onCreateWebhook: () => void;
+    onCreateWebhook: () => void | Promise<void>;
     creatingWebhook: boolean;
-    onTestWebhook: (webhookId: string) => void;
-    onDeleteWebhook: (webhookId: string) => void;
+    onTestWebhook: (webhookId: string) => void | Promise<void>;
+    onDeleteWebhook: (webhookId: string) => void | Promise<void>;
     testingWebhookId: string | null;
     deletingWebhookId: string | null;
 }
@@ -65,7 +65,9 @@ const WebhooksSection: React.FC<WebhooksSectionProps> = ({
                     ))}
                 </div>
                 <button
-                    onClick={onCreateWebhook}
+                    onClick={() => {
+                        void onCreateWebhook();
+                    }}
                     className="rounded-2xl border border-indigo-400/60 bg-indigo-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-indigo-500 disabled:border-white/20 disabled:bg-slate-700"
                     disabled={!url || creatingWebhook}
                 >
@@ -99,14 +101,18 @@ const WebhooksSection: React.FC<WebhooksSectionProps> = ({
                             </span>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => onTestWebhook(webhook.id)}
+                                    onClick={() => {
+                                        void onTestWebhook(webhook.id);
+                                    }}
                                     className="rounded-2xl border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10"
                                     disabled={testingWebhookId === webhook.id}
                                 >
                                     {testingWebhookId === webhook.id ? 'Testing…' : 'Send test'}
                                 </button>
                                 <button
-                                    onClick={() => onDeleteWebhook(webhook.id)}
+                                    onClick={() => {
+                                        void onDeleteWebhook(webhook.id);
+                                    }}
                                     className="rounded-2xl border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10"
                                     disabled={deletingWebhookId === webhook.id}
                                 >

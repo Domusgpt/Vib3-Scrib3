@@ -74,9 +74,14 @@ PAGERDUTY_ROUTING_KEY=...
 
 ### 2.4 Run Locally
 ```bash
-npm run server
+npm run dev        # start the Vite client on http://localhost:3000
+npm run server     # start the API + session server on http://localhost:3001
 ```
-Browse to `http://localhost:3001`. The Express server serves the compiled client from `dist/`.
+Use the Vite dev server during development so the client hot-reloads while the Express API proxies data. For a production-like
+test, run `npm run build` once and then start only `npm run server` (it serves the assets from `dist/`).
+
+> 📦 Looking for a quick release checklist? See [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) for the exact commands and smoke
+tests required to ship the MVP build.
 
 ---
 
