@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only index.ts"
+    "dev": "ts-node-dev --respawn --transpile-only index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server/index.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^1.23.0",
@@ -29,6 +32,9 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
-    "ts-node-dev": "^2.0.0"
+    "@types/supertest": "^2.0.16",
+    "supertest": "^6.3.4",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^1.6.0"
   }
 }

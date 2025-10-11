@@ -118,7 +118,7 @@ The platform now ships with a suite of cohesive operational systems that cover e
 
 **What is needed for release**
 
-* Add automated regression coverage for the auth callback pipeline and role guard middleware.
+* ✅ Automated regression coverage for the auth callback pipeline and role guard middleware now lives in `npm run test`.
 * Expand auth QA to cover enforced-provider reauthentication flows and failure UX.
 
 ### 5.2. Workspace Governance & Collaboration — **Status: Yellow**

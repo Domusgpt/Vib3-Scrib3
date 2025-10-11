@@ -1,49 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import ChatView from '../components/chat/ChatView';
 import ChatInput from '../components/ChatInput';
 import ProfileModal from '../components/ProfileModal';
-import AuthModal from '../components/AuthModal';
-import AppShell from '../components/layout/AppShell';
-import WorkspaceSummaryBar from '../components/dashboard/WorkspaceSummaryBar';
+import ConsoleScaffold from '../components/console/ConsoleScaffold';
 import { ChatMessage, IntegrationName, MessageAuthor, ProfileSource } from '../types';
 import * as apiService from '../services/apiService';
-import { useConsoleBootstrap } from '../hooks/useConsoleBootstrap';
+import { useConsolePageState } from '../hooks/useConsolePageState';
+import { useGuardedHandlers } from '../hooks/useGuardedHandlers';
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
+    const consoleState = useConsolePageState({ autoOpenAuthModal: true });
+
     const {
         authState,
-        billingPlans,
-        usageSnapshot,
-        organizations,
-        activeOrganizationId,
+        activeOrganization,
         profiles,
         activeProfileId,
         isBootstrapping,
         error: bootstrapError,
-        initialize,
         refreshAuthState,
         refreshUsage,
         reloadProfiles,
         selectProfile,
         switchOrganization,
-    } = useConsoleBootstrap();
+        logout,
+        billingActions,
+        guardWithAuth,
+        initialize: retryBootstrap,
+    } = consoleState;
+
+    const activeOrgId = activeOrganization?.organization.id ?? null;
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [isBillingActionLoading, setBillingActionLoading] = useState(false);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
-    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
 
-    const handleOpenProfileModal = useCallback(() => {
-        if (authState.isAuthenticated) {
-            setProfileModalOpen(true);
-        } else {
-            setAuthModalOpen(true);
-        }
-    }, [authState.isAuthenticated]);
+    const { isLoading: isBillingActionLoading, startTrial, upgradePlan, openPortal } = billingActions;
+
+    const openProfileModal = useCallback(() => {
+        setProfileModalOpen(true);
+    }, []);
 
     useEffect(() => {
         if (isBootstrapping) {
@@ -65,164 +63,180 @@ const HomePage: React.FC = () => {
         });
     }, [authState.isAuthenticated, bootstrapError, isBootstrapping]);
 
-    const handleSendMessage = async (text: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
-            return;
-        }
-
-        const userMessage: ChatMessage = { author: MessageAuthor.USER, text };
-        const history = messages;
-        setMessages(prev => [...prev, userMessage]);
-        setIsLoading(true);
-
-        try {
-            const response = await apiService.continueConversation({
-                prompt: text,
-                history,
-                context: { activeProfileId },
-            });
-
-            if (response.text?.includes('created a new style profile')) {
-                await reloadProfiles();
+    const sendMessage = useCallback(
+        async (text: string) => {
+            if (bootstrapError) {
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        author: MessageAuthor.SYSTEM,
+                        text: 'Workspace context is unavailable. Please try again after reloading.',
+                    },
+                ]);
+                return;
             }
 
-            setMessages(prev => [...prev, response]);
-            await refreshUsage(activeOrganizationId ?? undefined);
-        } catch (error) {
-            const errorMessage: ChatMessage = {
-                author: MessageAuthor.SYSTEM,
-                text: error instanceof Error ? `Error: ${error.message}` : 'An unknown error occurred.',
-            };
-            setMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+            const userMessage: ChatMessage = { author: MessageAuthor.USER, text };
+            const history = messages;
+            setMessages(prev => [...prev, userMessage]);
+            setIsLoading(true);
 
-    const handleProfileSelect = async (id: string) => {
-        await selectProfile(id);
-        const profileName = profiles.find(p => p.id === id)?.name;
-        if (profileName) {
+            try {
+                const response = await apiService.continueConversation({
+                    prompt: text,
+                    history,
+                    context: { activeProfileId },
+                });
+
+                if (response.text?.includes('created a new style profile')) {
+                    await reloadProfiles();
+                }
+
+                setMessages(prev => [...prev, response]);
+                await refreshUsage(activeOrgId ?? undefined);
+            } catch (error) {
+                const errorMessage: ChatMessage = {
+                    author: MessageAuthor.SYSTEM,
+                    text: error instanceof Error ? `Error: ${error.message}` : 'An unknown error occurred.',
+                };
+                setMessages(prev => [...prev, errorMessage]);
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [activeOrgId, activeProfileId, bootstrapError, messages, reloadProfiles, refreshUsage],
+    );
+
+    const selectProfileWithAnnouncement = useCallback(
+        async (id: string) => {
+            await selectProfile(id);
+            const profileName = profiles.find(p => p.id === id)?.name;
+            if (profileName) {
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        author: MessageAuthor.SYSTEM,
+                        text: `Style profile "${profileName}" is now active.`,
+                    },
+                ]);
+            }
+        },
+        [profiles, selectProfile],
+    );
+
+    const createProfile = useCallback(
+        async (name: string, source: ProfileSource) => {
+            setIsLoading(true);
+            setProfileModalOpen(false);
             setMessages(prev => [
                 ...prev,
                 {
                     author: MessageAuthor.SYSTEM,
-                    text: `Style profile "${profileName}" is now active.`,
+                    text: `Creating new profile "${name}" from ${source.type}... this may take a moment.`,
                 },
             ]);
-        }
+
+            let prompt = '';
+            if (source.type === 'text') {
+                prompt = `Create a new writing style profile for me. The name of the profile should be "${name}". Please analyze the following text to create it: """${source.content}"""`;
+            } else {
+                prompt = `Create a new writing style profile for me named "${name}" by analyzing my writing from my connected ${source.type} account.`;
+            }
+            await sendMessage(prompt);
+        },
+        [sendMessage],
+    );
+
+    const handleLogout = async () => {
+        await logout();
+        setMessages([{ author: MessageAuthor.BOT, text: 'You have been logged out.' }]);
     };
 
-    const handleCreateProfile = async (name: string, source: ProfileSource) => {
-        setIsLoading(true);
-        setProfileModalOpen(false);
+    const editMessage = useCallback(
+        async (index: number, newText: string) => {
+            const historyUpToIndex = messages.slice(0, index);
+            const userMessageToResend: ChatMessage = { author: MessageAuthor.USER, text: newText };
+            setMessages([...historyUpToIndex, userMessageToResend]);
+
+            setIsLoading(true);
+            try {
+                const response = await apiService.continueConversation({
+                    prompt: newText,
+                    history: historyUpToIndex,
+                    context: { activeProfileId },
+                });
+                if (response.text?.includes('created a new style profile')) {
+                    await reloadProfiles();
+                }
+                setMessages([...historyUpToIndex, userMessageToResend, response]);
+                await refreshUsage(activeOrgId ?? undefined);
+            } catch (error) {
+                const errorMessage: ChatMessage = {
+                    author: MessageAuthor.SYSTEM,
+                    text: error instanceof Error ? error.message : 'An unknown error occurred.',
+                };
+                setMessages([...historyUpToIndex, userMessageToResend, errorMessage]);
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [activeOrgId, activeProfileId, messages, reloadProfiles, refreshUsage],
+    );
+
+    const disconnectIntegration = useCallback(
+        async (integration: IntegrationName) => {
+            try {
+                await apiService.disconnectIntegration(integration);
+                await refreshAuthState();
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        author: MessageAuthor.SYSTEM,
+                        text: `${integration.charAt(0).toUpperCase() + integration.slice(1)} has been disconnected.`,
+                    },
+                ]);
+            } catch (error) {
+                const errorMessage: ChatMessage = {
+                    author: MessageAuthor.SYSTEM,
+                    text: error instanceof Error ? error.message : `Failed to disconnect ${integration}.`,
+                };
+                setMessages(prev => [...prev, errorMessage]);
+            }
+        },
+        [refreshAuthState],
+    );
+
+    const handleStartTrial = async (planId: string) => {
+        const result = await startTrial(planId);
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
+            return;
+        }
+
         setMessages(prev => [
             ...prev,
             {
                 author: MessageAuthor.SYSTEM,
-                text: `Creating new profile "${name}" from ${source.type}... this may take a moment.`,
+                text: 'Your Pro trial is now active. Enjoy extended writing capacity and workflow automations!',
             },
         ]);
-
-        let prompt = '';
-        if (source.type === 'text') {
-            prompt = `Create a new writing style profile for me. The name of the profile should be "${name}". Please analyze the following text to create it: """${source.content}"""`;
-        } else {
-            prompt = `Create a new writing style profile for me named "${name}" by analyzing my writing from my connected ${source.type} account.`;
-        }
-        await handleSendMessage(prompt);
-    };
-
-    const handleLogout = async () => {
-        await apiService.logout();
-        await initialize();
-        setMessages([{ author: MessageAuthor.BOT, text: 'You have been logged out.' }]);
-    };
-
-    const handleEditMessage = async (index: number, newText: string) => {
-        const historyUpToIndex = messages.slice(0, index);
-        const userMessageToResend: ChatMessage = { author: MessageAuthor.USER, text: newText };
-        setMessages([...historyUpToIndex, userMessageToResend]);
-
-        setIsLoading(true);
-        try {
-            const response = await apiService.continueConversation({
-                prompt: newText,
-                history: historyUpToIndex,
-                context: { activeProfileId },
-            });
-            if (response.text?.includes('created a new style profile')) {
-                await reloadProfiles();
-            }
-            setMessages([...historyUpToIndex, userMessageToResend, response]);
-            await refreshUsage(activeOrganizationId ?? undefined);
-        } catch (error) {
-            const errorMessage: ChatMessage = {
-                author: MessageAuthor.SYSTEM,
-                text: error instanceof Error ? error.message : 'An unknown error occurred.',
-            };
-            setMessages([...historyUpToIndex, userMessageToResend, errorMessage]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleDisconnectIntegration = async (integration: IntegrationName) => {
-        try {
-            await apiService.disconnectIntegration(integration);
-            await refreshAuthState();
-            setMessages(prev => [
-                ...prev,
-                {
-                    author: MessageAuthor.SYSTEM,
-                    text: `${integration.charAt(0).toUpperCase() + integration.slice(1)} has been disconnected.`,
-                },
-            ]);
-        } catch (error) {
-            const errorMessage: ChatMessage = {
-                author: MessageAuthor.SYSTEM,
-                text: error instanceof Error ? error.message : `Failed to disconnect ${integration}.`,
-            };
-            setMessages(prev => [...prev, errorMessage]);
-        }
-    };
-
-    const handleStartTrial = async (planId: string) => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
-            return;
-        }
-
-        setBillingActionLoading(true);
-        try {
-            await apiService.startTrial(planId, activeOrganizationId ?? undefined);
-            await refreshAuthState();
-            await refreshUsage(activeOrganizationId ?? undefined);
-            setMessages(prev => [
-                ...prev,
-                {
-                    author: MessageAuthor.SYSTEM,
-                    text: 'Your Pro trial is now active. Enjoy extended writing capacity and workflow automations!',
-                },
-            ]);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to start trial.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
-        }
     };
 
     const handleUpgradePlan = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await upgradePlan(planId, cadence);
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
             return;
         }
 
-        setBillingActionLoading(true);
-        try {
-            const { checkoutUrl } = await apiService.createCheckoutSession(planId, cadence, activeOrganizationId ?? undefined);
+        const checkoutUrl = result.data?.checkoutUrl;
+        if (checkoutUrl) {
             window.open(checkoutUrl, '_blank', 'noopener');
             setMessages(prev => [
                 ...prev,
@@ -231,40 +245,77 @@ const HomePage: React.FC = () => {
                     text: 'We opened a secure checkout tab so you can finalize the upgrade.',
                 },
             ]);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to start checkout session.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
         }
     };
 
     const handleOpenPortal = async () => {
-        if (!authState.isAuthenticated) {
-            setAuthModalOpen(true);
+        const result = await openPortal();
+        if (result.status === 'requires-auth') {
+            return;
+        }
+        if (result.status === 'error') {
+            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: result.message }]);
             return;
         }
 
-        setBillingActionLoading(true);
-        try {
-            const { url } = await apiService.openBillingPortal(activeOrganizationId ?? undefined);
-            window.open(url, '_blank', 'noopener');
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to open billing portal.';
-            setMessages(prev => [...prev, { author: MessageAuthor.SYSTEM, text: message }]);
-        } finally {
-            setBillingActionLoading(false);
+        const portalUrl = result.data?.url;
+        if (portalUrl) {
+            window.open(portalUrl, '_blank', 'noopener');
         }
     };
 
-    const handleOrganizationChange = async (organizationId: string) => {
-        await switchOrganization(organizationId);
-    };
-
-    const activeOrganization = useMemo(
-        () => organizations.find(org => org.organization.id === activeOrganizationId) ?? organizations[0],
-        [activeOrganizationId, organizations],
+    const switchOrganizationWithFeedback = useCallback(
+        async (organizationId: string) => {
+            try {
+                await switchOrganization(organizationId);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unable to switch workspace.';
+                setMessages(prev => [
+                    ...prev,
+                    { author: MessageAuthor.SYSTEM, text: message },
+                ]);
+            }
+        },
+        [switchOrganization],
     );
+
+    const navigateToWorkspace = useCallback(() => {
+        navigate('/workspace');
+    }, [navigate]);
+
+    const guardableHandlers = useMemo(
+        () => ({
+            openProfileModal,
+            sendMessage,
+            selectProfileWithAnnouncement,
+            createProfile,
+            editMessage,
+            disconnectIntegration,
+            switchOrganizationWithFeedback,
+            navigateToWorkspace,
+        }),
+        [
+            createProfile,
+            disconnectIntegration,
+            editMessage,
+            navigateToWorkspace,
+            openProfileModal,
+            selectProfileWithAnnouncement,
+            sendMessage,
+            switchOrganizationWithFeedback,
+        ],
+    );
+
+    const {
+        openProfileModal: handleOpenProfileModal,
+        sendMessage: handleSendMessage,
+        selectProfileWithAnnouncement: handleProfileSelect,
+        createProfile: handleCreateProfile,
+        editMessage: handleEditMessage,
+        disconnectIntegration: handleDisconnectIntegration,
+        switchOrganizationWithFeedback: handleOrganizationChange,
+        navigateToWorkspace: handleOpenWorkspaceSettings,
+    } = useGuardedHandlers(guardWithAuth, guardableHandlers);
 
     const headerActions = (
         <div className="flex flex-wrap items-center gap-3">
@@ -275,7 +326,7 @@ const HomePage: React.FC = () => {
                 New profile
             </button>
             <button
-                onClick={() => navigate('/workspace')}
+                onClick={handleOpenWorkspaceSettings}
                 className="rounded-2xl border border-indigo-400/50 bg-indigo-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-indigo-100 transition hover:bg-indigo-500/40"
             >
                 Workspace settings
@@ -283,42 +334,38 @@ const HomePage: React.FC = () => {
         </div>
     );
 
-    const isContextLoading = isBootstrapping || (isLoading && authState.isAuthenticated);
+    const isContextLoading =
+        !bootstrapError && (isBootstrapping || (isLoading && authState.isAuthenticated));
 
     return (
         <>
-            <AppShell
-                sidebar={
-                    <Sidebar
-                        authState={authState}
-                        profiles={profiles}
-                        activeProfileId={activeProfileId}
-                        onProfileSelect={handleProfileSelect}
-                        onProfileCreate={handleOpenProfileModal}
-                        onLogout={handleLogout}
-                        onDisconnect={handleDisconnectIntegration}
-                        billingPlans={billingPlans}
-                        usage={usageSnapshot}
-                        onStartTrial={handleStartTrial}
-                        onUpgrade={handleUpgradePlan}
-                        onOpenPortal={handleOpenPortal}
-                        isBillingActionLoading={isBillingActionLoading}
-                        organizations={organizations}
-                        activeOrganizationId={activeOrganizationId}
-                        onOrganizationChange={handleOrganizationChange}
-                    />
-                }
+            <ConsoleScaffold
+                state={consoleState}
                 eyebrow="Creator Ops"
                 title="Compose and orchestrate with Vib3 Scribe"
                 description="Coordinate writing agents, monitor capacity, and activate workflows from a single glassmorphic cockpit inspired by the Nimbus Guardian aesthetic."
                 actions={headerActions}
-                headerContent={
-                    <WorkspaceSummaryBar
-                        organization={activeOrganization}
-                        usage={usageSnapshot}
-                        isLoading={isContextLoading}
-                    />
-                }
+                summaryLoading={isContextLoading}
+                isLoading={isBootstrapping}
+                loadingEyebrow="Bootstrapping"
+                loadingMessage="Warming up your writing console…"
+                loadingHint="Fetching workspace context, usage, and style profiles."
+                isError={Boolean(bootstrapError)}
+                errorTitle="Workspace data failed to load"
+                errorMessage={bootstrapError ?? undefined}
+                errorHint="Check your connection and try again."
+                errorActionLabel="Reload"
+                onRetry={retryBootstrap}
+                sidebarOverrides={{
+                    onProfileSelect: handleProfileSelect,
+                    onProfileCreate: handleOpenProfileModal,
+                    onLogout: handleLogout,
+                    onDisconnect: handleDisconnectIntegration,
+                    onStartTrial: handleStartTrial,
+                    onUpgrade: handleUpgradePlan,
+                    onOpenPortal: handleOpenPortal,
+                    onOrganizationChange: handleOrganizationChange,
+                }}
             >
                 <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-6 px-6 sm:px-10">
                     <div className="flex-1 overflow-hidden">
@@ -326,9 +373,12 @@ const HomePage: React.FC = () => {
                             <ChatView messages={messages} isLoading={isLoading} onEditMessage={handleEditMessage} />
                         </div>
                     </div>
-                    <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading || isBootstrapping} />
+                    <ChatInput
+                        onSendMessage={handleSendMessage}
+                        isLoading={isLoading || isBootstrapping || Boolean(bootstrapError)}
+                    />
                 </div>
-            </AppShell>
+            </ConsoleScaffold>
             <ProfileModal
                 isOpen={isProfileModalOpen}
                 onClose={() => setProfileModalOpen(false)}
@@ -336,7 +386,6 @@ const HomePage: React.FC = () => {
                 isLoading={isLoading}
                 authState={authState}
             />
-            {isAuthModalOpen && <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />}
         </>
     );
 };

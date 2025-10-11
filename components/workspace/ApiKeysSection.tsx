@@ -10,10 +10,10 @@ interface ApiKeysSectionProps {
     onToggleScope: (scope: ApiScope) => void;
     expiresAt: string;
     onExpiresAtChange: (value: string) => void;
-    onCreateKey: () => void;
+    onCreateKey: () => void | Promise<void>;
     creatingKey: boolean;
     newKey: ApiKeyWithSecret | null;
-    onRevokeKey: (keyId: string) => void;
+    onRevokeKey: (keyId: string) => void | Promise<void>;
     revokingKeyId: string | null;
 }
 
@@ -73,7 +73,9 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
                     className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-slate-200 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
                 <button
-                    onClick={onCreateKey}
+                    onClick={() => {
+                        void onCreateKey();
+                    }}
                     className="rounded-2xl border border-indigo-400/60 bg-indigo-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-indigo-500 disabled:border-white/20 disabled:bg-slate-700"
                     disabled={!apiKeyName || creatingKey}
                 >
@@ -117,7 +119,9 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
                             </span>
                             {!key.revokedAt && (
                                 <button
-                                    onClick={() => onRevokeKey(key.id)}
+                                    onClick={() => {
+                                        void onRevokeKey(key.id);
+                                    }}
                                     className="rounded-2xl border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10"
                                     disabled={revokingKeyId === key.id}
                                 >
