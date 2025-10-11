@@ -6,7 +6,7 @@ interface AuditLogSectionProps {
     isLoading: boolean;
     exportSince: string;
     onExportSinceChange: (value: string) => void;
-    onExport: () => void;
+    onExport: () => void | Promise<void>;
     isExporting: boolean;
 }
 
@@ -38,7 +38,9 @@ const AuditLogSection: React.FC<AuditLogSectionProps> = ({
                         />
                     </label>
                     <button
-                        onClick={onExport}
+                        onClick={() => {
+                            void onExport();
+                        }}
                         className="rounded-2xl border border-indigo-400/60 bg-indigo-500/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-indigo-500 disabled:border-white/20 disabled:bg-slate-700"
                         disabled={isExporting}
                     >
