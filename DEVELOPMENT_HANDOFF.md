@@ -107,6 +107,8 @@ Our roadmap is focused on deepening the intelligence and utility of our integrat
 
 The platform now ships with a suite of cohesive operational systems that cover end-to-end tenant administration. The table below captures the current scope alongside any outstanding work required before we can confidently mark the release as production-ready.
 
+> 🔁 **Release automation:** Use `npm run release:verify` from the repository root to execute the end-to-end build + test sweep. The script is idempotent and safe to plug into CI/CD orchestrators or other tooling in your ecosystem.
+
 ### 5.1. Identity, Access & Session Control — **Status: Yellow**
 
 **What exists today**
@@ -118,7 +120,7 @@ The platform now ships with a suite of cohesive operational systems that cover e
 
 **What is needed for release**
 
-* Add automated regression coverage for the auth callback pipeline and role guard middleware.
+* ✅ Automated regression coverage for the auth callback pipeline and role guard middleware now lives in `npm run test`.
 * Expand auth QA to cover enforced-provider reauthentication flows and failure UX.
 
 ### 5.2. Workspace Governance & Collaboration — **Status: Yellow**

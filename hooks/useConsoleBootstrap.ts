@@ -14,6 +14,7 @@ interface ConsoleBootstrapState {
     usageSnapshot: UsageSnapshot | null;
     organizations: OrganizationSummary[];
     activeOrganizationId: string | null;
+    activeOrganization: OrganizationSummary | null;
     profiles: StyleProfile[];
     activeProfileId: string | null;
     isBootstrapping: boolean;
@@ -27,6 +28,7 @@ interface ConsoleBootstrapActions {
     reloadProfiles: () => Promise<StyleProfile[]>;
     selectProfile: (profileId: string) => Promise<void>;
     switchOrganization: (organizationId: string) => Promise<void>;
+    logout: () => Promise<void>;
 }
 
 export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapActions => {
@@ -68,10 +70,14 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
 
     const refreshAuthState = useCallback(async () => {
         const nextAuth = await apiService.getAuthState();
+        const nextOrganizations = nextAuth.organizations ?? [];
+        const resolvedOrganizationId =
+            nextAuth.activeOrganizationId ?? nextOrganizations[0]?.organization.id ?? null;
+
         setAuthState(nextAuth);
         setUsageSnapshot(nextAuth.usage ?? null);
-        setOrganizations(nextAuth.organizations ?? []);
-        setActiveOrganizationId(nextAuth.activeOrganizationId ?? null);
+        setOrganizations(nextOrganizations);
+        setActiveOrganizationId(resolvedOrganizationId);
         return nextAuth;
     }, []);
 
@@ -127,6 +133,10 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
                 ]);
             } catch (err) {
                 console.error('Failed to switch organization', err);
+                if (err instanceof Error) {
+                    throw err;
+                }
+                throw new Error('Failed to switch organization');
             }
         },
         [refreshAuthState, refreshUsage],
@@ -143,8 +153,11 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             setBillingPlans(plans);
             setAuthState(auth);
             setUsageSnapshot(auth.usage ?? null);
-            setOrganizations(auth.organizations ?? []);
-            setActiveOrganizationId(auth.activeOrganizationId ?? null);
+            const authOrganizations = auth.organizations ?? [];
+            setOrganizations(authOrganizations);
+            setActiveOrganizationId(
+                auth.activeOrganizationId ?? authOrganizations[0]?.organization.id ?? null,
+            );
 
             if (auth.isAuthenticated) {
                 const fetchedProfiles = await apiService.getProfiles();
@@ -170,9 +183,29 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
         }
     }, [updateProfilesState]);
 
+    const logout = useCallback(async () => {
+        await apiService.logout();
+        await initialize();
+    }, [initialize]);
+
     useEffect(() => {
         initialize();
     }, [initialize]);
+
+    const activeOrganization = useMemo(() => {
+        if (organizations.length === 0) {
+            return null;
+        }
+        if (activeOrganizationId) {
+            const match = organizations.find(
+                organization => organization.organization.id === activeOrganizationId,
+            );
+            if (match) {
+                return match;
+            }
+        }
+        return organizations[0];
+    }, [activeOrganizationId, organizations]);
 
     return useMemo(
         () => ({
@@ -181,6 +214,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             usageSnapshot,
             organizations,
             activeOrganizationId,
+            activeOrganization,
             profiles,
             activeProfileId,
             isBootstrapping,
@@ -191,9 +225,11 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
         }),
         [
             activeOrganizationId,
+            activeOrganization,
             activeProfileId,
             authState,
             billingPlans,
@@ -207,6 +243,7 @@ export const useConsoleBootstrap = (): ConsoleBootstrapState & ConsoleBootstrapA
             reloadProfiles,
             selectProfile,
             switchOrganization,
+            logout,
             usageSnapshot,
         ],
     );

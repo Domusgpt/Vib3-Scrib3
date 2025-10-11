@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BillingSummary from '../components/billing/BillingSummary';
 import NotificationBanner from '../components/workspace/NotificationBanner';
@@ -9,26 +9,24 @@ import ApiKeysSection from '../components/workspace/ApiKeysSection';
 import WebhooksSection from '../components/workspace/WebhooksSection';
 import AuditLogSection from '../components/workspace/AuditLogSection';
 import AccessPoliciesSection from '../components/workspace/AccessPoliciesSection';
-import AppShell from '../components/layout/AppShell';
-import WorkspaceSummaryBar from '../components/dashboard/WorkspaceSummaryBar';
+import ConsoleScaffold from '../components/console/ConsoleScaffold';
 import {
     ApiKeySummary,
     ApiKeyWithSecret,
     ApiScope,
     AuditLog,
-    BillingPlan,
     Invitation,
     OrganizationAuthPolicy,
     OrganizationAuthPolicyUpdate,
     OrganizationMember,
     OrganizationRole,
-    OrganizationSummary,
-    UsageSnapshot,
     WebhookEvent,
     WebhookSubscription,
-    AuthState,
 } from '../types';
 import * as apiService from '../services/apiService';
+import { useConsolePageState } from '../hooks/useConsolePageState';
+import { useConsole } from '../hooks/useConsoleContext';
+import { useGuardedHandlers } from '../hooks/useGuardedHandlers';
 
 const AVAILABLE_SCOPES: Array<{ label: string; value: ApiScope; description: string }> = [
     { label: 'Chat: write', value: 'chat:write', description: 'Generate content and consume tokens.' },
@@ -46,13 +44,6 @@ const AVAILABLE_EVENTS: Array<{ label: string; value: WebhookEvent; description:
 ];
 
 const WorkspaceSettings: React.FC = () => {
-    const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
-    const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const selectedOrganization = useMemo(
-        () => organizations.find(org => org.organization.id === selectedOrgId) ?? organizations[0],
-        [organizations, selectedOrgId],
-    );
-
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
@@ -62,11 +53,6 @@ const WorkspaceSettings: React.FC = () => {
     const [authPolicy, setAuthPolicy] = useState<OrganizationAuthPolicy | null>(null);
     const [isAuthPolicyLoading, setIsAuthPolicyLoading] = useState(false);
     const [isUpdatingAuthPolicy, setIsUpdatingAuthPolicy] = useState(false);
-
-    const [billingPlans, setBillingPlans] = useState<BillingPlan[]>([]);
-    const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
-
-    const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
     const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
     const [isUsageLoading, setIsUsageLoading] = useState(false);
@@ -96,37 +82,57 @@ const WorkspaceSettings: React.FC = () => {
     const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
     const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
-    const [billingActionLoading, setBillingActionLoading] = useState(false);
 
     const [auditExportSince, setAuditExportSince] = useState('');
     const [isExportingAudit, setIsExportingAudit] = useState(false);
 
-    const workspaceAuthState: AuthState = useMemo(
-        () => ({
-            isAuthenticated: true,
-            user: null,
-            license: null,
-            subscription: selectedOrganization?.subscription ?? null,
-            usage: usageSnapshot,
-        }),
-        [selectedOrganization?.subscription, usageSnapshot],
-    );
+    const { refreshUsage: refreshUsageFromConsole } = useConsole();
+    const billingOrganizationRef = useRef<string | null>(null);
 
     const refreshUsage = useCallback(
-        async (organizationId: string) => {
+        async (organizationId?: string) => {
+            const targetOrganizationId = organizationId ?? billingOrganizationRef.current;
+            if (!targetOrganizationId) {
+                return;
+            }
             setIsUsageLoading(true);
             try {
-                const usage = await apiService.getUsage(organizationId);
-                setUsageSnapshot(usage);
-            } catch (err) {
-                console.error(err);
-                setUsageSnapshot(null);
+                await refreshUsageFromConsole(targetOrganizationId);
             } finally {
                 setIsUsageLoading(false);
             }
         },
-        [],
+        [refreshUsageFromConsole],
     );
+
+    const consoleState = useConsolePageState({
+        autoOpenAuthModal: true,
+        refreshUsage,
+    });
+
+    const {
+        authState,
+        billingPlans,
+        usageSnapshot,
+        organizations,
+        activeOrganization,
+        refreshAuthState,
+        switchOrganization,
+        isBootstrapping,
+        billingActions,
+        guardWithAuth,
+        error: bootstrapError,
+        initialize: retryBootstrap,
+    } = consoleState;
+
+    const selectedOrganization = activeOrganization ?? organizations[0] ?? null;
+    const selectedOrganizationId = selectedOrganization?.organization.id ?? null;
+
+    useEffect(() => {
+        billingOrganizationRef.current = selectedOrganizationId;
+    }, [selectedOrganizationId]);
+
+    const { isLoading: billingActionLoading, startTrial, upgradePlan, openPortal } = billingActions;
 
     const loadOrganizationDetail = useCallback(
         async (organizationId: string) => {
@@ -161,42 +167,14 @@ const WorkspaceSettings: React.FC = () => {
         [refreshUsage],
     );
 
-    const loadOrganizations = useCallback(async () => {
-        setLoading(true);
-        try {
-            const response = await apiService.getOrganizations();
-            setOrganizations(response.organizations);
-            setSelectedOrgId(response.activeOrganizationId ?? response.organizations[0]?.organization.id ?? null);
-            setError(null);
-        } catch (err) {
-            console.error(err);
-            setError('Failed to load organizations.');
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (bootstrapError) {
+            return;
         }
-    }, []);
-
-    useEffect(() => {
-        loadOrganizations();
-    }, [loadOrganizations]);
-
-    useEffect(() => {
-        if (selectedOrganization) {
-            loadOrganizationDetail(selectedOrganization.organization.id);
+        if (selectedOrganizationId && authState.isAuthenticated) {
+            void loadOrganizationDetail(selectedOrganizationId);
         }
-    }, [loadOrganizationDetail, selectedOrganization]);
-
-    useEffect(() => {
-        const fetchPlans = async () => {
-            try {
-                const plans = await apiService.getBillingPlans();
-                setBillingPlans(plans);
-            } catch (err) {
-                console.error('Failed to load billing plans', err);
-            }
-        };
-        fetchPlans();
-    }, []);
+    }, [authState.isAuthenticated, bootstrapError, loadOrganizationDetail, selectedOrganizationId]);
 
     useEffect(() => {
         if (!notification) return;
@@ -204,23 +182,27 @@ const WorkspaceSettings: React.FC = () => {
         return () => window.clearTimeout(timeout);
     }, [notification]);
 
-    const handleSwitchOrganization = async (organizationId: string) => {
-        setError(null);
-        setNotification(null);
-        setIsSwitchingOrg(true);
-        try {
-            await apiService.setActiveOrganization(organizationId);
-            setSelectedOrgId(organizationId);
-            setNotification({ type: 'info', message: 'Workspace switched.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to switch workspace.');
-        } finally {
-            setIsSwitchingOrg(false);
-        }
-    };
+    const switchOrganizationAction = useCallback(
+        async (organizationId: string) => {
+            setError(null);
+            setNotification(null);
+            setIsSwitchingOrg(true);
+            setIsUsageLoading(true);
+            try {
+                await switchOrganization(organizationId);
+                setNotification({ type: 'info', message: 'Workspace switched.' });
+            } catch (err) {
+                console.error(err);
+                setError(err instanceof Error ? err.message : 'Unable to switch workspace.');
+            } finally {
+                setIsSwitchingOrg(false);
+                setIsUsageLoading(false);
+            }
+        },
+        [switchOrganization],
+    );
 
-    const handleInvite = async () => {
+    const inviteMember = useCallback(async () => {
         if (!selectedOrganization || !inviteEmail) return;
         setError(null);
         setNotification(null);
@@ -270,9 +252,9 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsInviting(false);
         }
-    };
+    }, [inviteEmail, inviteRole, selectedOrganization]);
 
-    const handleCreateApiKey = async () => {
+    const createApiKey = useCallback(async () => {
         if (!selectedOrganization || !apiKeyName) return;
         setCreatingApiKey(true);
         setError(null);
@@ -330,9 +312,14 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setCreatingApiKey(false);
         }
-    };
+    }, [
+        apiKeyExpiresAt,
+        apiKeyName,
+        apiKeyScopes,
+        selectedOrganization,
+    ]);
 
-    const handleCreateWebhook = async () => {
+    const createWebhook = useCallback(async () => {
         if (!selectedOrganization || !webhookUrl) return;
         setCreatingWebhook(true);
         setError(null);
@@ -353,34 +340,47 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setCreatingWebhook(false);
         }
-    };
+    }, [selectedOrganization, webhookEvents, webhookUrl]);
 
-    const handleSaveAuthPolicy = async (payload: OrganizationAuthPolicyUpdate) => {
-        if (!selectedOrganization) return;
-        setIsUpdatingAuthPolicy(true);
-        setError(null);
-        setNotification(null);
-        try {
-            const updated = await apiService.updateOrganizationAuthPolicy(selectedOrganization.organization.id, payload);
-            setAuthPolicy(updated);
-            setNotification({ type: 'success', message: 'Sign-on policy updated.' });
-        } catch (err) {
-            console.error(err);
-            setError(err instanceof Error ? err.message : 'Unable to update sign-on policy.');
-        } finally {
-            setIsUpdatingAuthPolicy(false);
-        }
-    };
+    const saveAuthPolicy = useCallback(
+        async (payload: OrganizationAuthPolicyUpdate) => {
+            if (!selectedOrganization) return;
+            setIsUpdatingAuthPolicy(true);
+            setError(null);
+            setNotification(null);
+            try {
+                const updated = await apiService.updateOrganizationAuthPolicy(
+                    selectedOrganization.organization.id,
+                    payload,
+                );
+                setAuthPolicy(updated);
+                setNotification({ type: 'success', message: 'Sign-on policy updated.' });
+            } catch (err) {
+                console.error(err);
+                setError(err instanceof Error ? err.message : 'Unable to update sign-on policy.');
+            } finally {
+                setIsUpdatingAuthPolicy(false);
+            }
+        },
+        [selectedOrganization],
+    );
 
-    const handleCreateWorkspace = async () => {
+    const createWorkspace = useCallback(async () => {
         if (!newWorkspaceName.trim()) return;
         setIsCreatingWorkspace(true);
         setError(null);
         setNotification(null);
         try {
             const summary = await apiService.createOrganization(newWorkspaceName.trim());
-            await loadOrganizations();
-            setSelectedOrgId(summary.organization.id);
+            await refreshAuthState();
+            if (summary?.organization?.id) {
+                setIsUsageLoading(true);
+                try {
+                    await switchOrganization(summary.organization.id);
+                } finally {
+                    setIsUsageLoading(false);
+                }
+            }
             setNewWorkspaceName('');
             setNotification({ type: 'success', message: 'Workspace created.' });
         } catch (err) {
@@ -389,49 +389,55 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsCreatingWorkspace(false);
         }
-    };
+    }, [newWorkspaceName, refreshAuthState, switchOrganization]);
 
-    const handleRevokeInvitation = async (invitationId: string) => {
-        if (!selectedOrganization) return;
-        if (!window.confirm('Revoke this invitation? The invite link will no longer work.')) {
-            return;
-        }
-        setError(null);
-        setNotification(null);
-        setRevokingInvitationId(invitationId);
-        try {
-            await apiService.revokeInvitation(selectedOrganization.organization.id, invitationId);
-            setInvitations(prev => prev.filter(invite => invite.id !== invitationId));
-            setNotification({ type: 'info', message: 'Invitation revoked.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to revoke invitation.');
-        } finally {
-            setRevokingInvitationId(null);
-        }
-    };
+    const revokeInvitation = useCallback(
+        async (invitationId: string) => {
+            if (!selectedOrganization) return;
+            if (!window.confirm('Revoke this invitation? The invite link will no longer work.')) {
+                return;
+            }
+            setError(null);
+            setNotification(null);
+            setRevokingInvitationId(invitationId);
+            try {
+                await apiService.revokeInvitation(selectedOrganization.organization.id, invitationId);
+                setInvitations(prev => prev.filter(invite => invite.id !== invitationId));
+                setNotification({ type: 'info', message: 'Invitation revoked.' });
+            } catch (err) {
+                console.error(err);
+                setError('Unable to revoke invitation.');
+            } finally {
+                setRevokingInvitationId(null);
+            }
+        },
+        [selectedOrganization],
+    );
 
-    const handleRevokeApiKey = async (keyId: string) => {
-        if (!selectedOrganization) return;
-        if (!window.confirm('Revoke this API key? Applications using it will immediately lose access.')) {
-            return;
-        }
-        setError(null);
-        setNotification(null);
-        setRevokingApiKeyId(keyId);
-        try {
-            const updated = await apiService.revokeApiKey(selectedOrganization.organization.id, keyId);
-            setApiKeys(prev => prev.map(key => (key.id === keyId ? updated : key)));
-            setNotification({ type: 'info', message: 'API key revoked.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to revoke API key.');
-        } finally {
-            setRevokingApiKeyId(null);
-        }
-    };
+    const revokeApiKey = useCallback(
+        async (keyId: string) => {
+            if (!selectedOrganization) return;
+            if (!window.confirm('Revoke this API key? Applications using it will immediately lose access.')) {
+                return;
+            }
+            setError(null);
+            setNotification(null);
+            setRevokingApiKeyId(keyId);
+            try {
+                const updated = await apiService.revokeApiKey(selectedOrganization.organization.id, keyId);
+                setApiKeys(prev => prev.map(key => (key.id === keyId ? updated : key)));
+                setNotification({ type: 'info', message: 'API key revoked.' });
+            } catch (err) {
+                console.error(err);
+                setError('Unable to revoke API key.');
+            } finally {
+                setRevokingApiKeyId(null);
+            }
+        },
+        [selectedOrganization],
+    );
 
-    const handleExportAuditLog = async () => {
+    const exportAuditLog = useCallback(async () => {
         if (!selectedOrganization) return;
         setIsExportingAudit(true);
         setError(null);
@@ -459,171 +465,253 @@ const WorkspaceSettings: React.FC = () => {
         } finally {
             setIsExportingAudit(false);
         }
-    };
+    }, [auditExportSince, selectedOrganization]);
 
-    const handleDeleteWebhook = async (webhookId: string) => {
+    const deleteWebhook = useCallback(
+        async (webhookId: string) => {
+            if (!selectedOrganization) return;
+            if (!window.confirm('Delete this webhook endpoint? Events will stop sending immediately.')) {
+                return;
+            }
+            setError(null);
+            setNotification(null);
+            setDeletingWebhookId(webhookId);
+            try {
+                await apiService.deleteWebhook(selectedOrganization.organization.id, webhookId);
+                setWebhooks(prev => prev.filter(webhook => webhook.id !== webhookId));
+                setNotification({ type: 'info', message: 'Webhook deleted.' });
+            } catch (err) {
+                console.error(err);
+                setError('Unable to delete webhook.');
+            } finally {
+                setDeletingWebhookId(null);
+            }
+        },
+        [selectedOrganization],
+    );
+
+    const testWebhook = useCallback(
+        async (webhookId: string) => {
+            if (!selectedOrganization) return;
+            setError(null);
+            setNotification(null);
+            setTestingWebhookId(webhookId);
+            try {
+                const result = await apiService.testWebhook(selectedOrganization.organization.id, webhookId);
+                const now = new Date().toISOString();
+                setWebhooks(prev =>
+                    prev.map(webhook =>
+                        webhook.id === webhookId
+                            ? {
+                                  ...webhook,
+                                  lastDeliveredAt: result?.delivered ? now : webhook.lastDeliveredAt,
+                                  lastFailureAt: result?.delivered ? webhook.lastFailureAt : now,
+                              }
+                            : webhook,
+                    ),
+                );
+                if (result?.delivered) {
+                    const statusDetails = result.status ? ` (status ${result.status})` : '';
+                    setNotification({ type: 'success', message: `Test webhook delivered${statusDetails}.` });
+                } else {
+                    setNotification({ type: 'info', message: 'Test webhook request could not be delivered.' });
+                }
+            } catch (err) {
+                console.error(err);
+                setError('Unable to send test webhook.');
+            } finally {
+                setTestingWebhookId(null);
+            }
+        },
+        [selectedOrganization],
+    );
+
+    const changeMemberRole = useCallback(
+        async (memberId: string, role: OrganizationRole) => {
+            if (!selectedOrganization) return;
+            setError(null);
+            setNotification(null);
+            setUpdatingMemberId(memberId);
+            try {
+                const membership = await apiService.updateMemberRole(
+                    selectedOrganization.organization.id,
+                    memberId,
+                    role,
+                );
+                setMembers(prev =>
+                    prev.map(member =>
+                        member.membership.id === memberId
+                            ? {
+                                  ...member,
+                                  membership: {
+                                      ...member.membership,
+                                      role: membership.role,
+                                      lastActiveAt: membership.lastActiveAt,
+                                  },
+                              }
+                            : member,
+                    ),
+                );
+                setNotification({ type: 'success', message: 'Member role updated.' });
+            } catch (err) {
+                console.error(err);
+                setError('Unable to update member role.');
+            } finally {
+                setUpdatingMemberId(null);
+            }
+        },
+        [selectedOrganization],
+    );
+
+    const removeMember = useCallback(
+        async (memberId: string) => {
+            if (!selectedOrganization) return;
+            if (!window.confirm('Remove this member from the workspace?')) {
+                return;
+            }
+            setError(null);
+            setNotification(null);
+            setRemovingMemberId(memberId);
+            try {
+                await apiService.removeMember(selectedOrganization.organization.id, memberId);
+                setMembers(prev => prev.filter(member => member.membership.id !== memberId));
+                setNotification({ type: 'info', message: 'Member removed.' });
+            } catch (err) {
+                console.error(err);
+                setError('Unable to remove member.');
+            } finally {
+                setRemovingMemberId(null);
+            }
+        },
+        [selectedOrganization],
+    );
+
+    const startTrialForWorkspace = useCallback(
+        async (planId: string) => {
+            if (!selectedOrganization) return;
+            setError(null);
+            setNotification(null);
+            const result = await startTrial(planId, { organizationId: selectedOrganization.organization.id });
+            if (result.status === 'requires-auth') {
+                return;
+            }
+            if (result.status === 'error') {
+                console.error(result.message);
+                setError('Unable to start a trial.');
+                return;
+            }
+            if (result.status === 'success') {
+                setNotification({ type: 'success', message: 'Trial started for this workspace.' });
+            }
+        },
+        [selectedOrganization, startTrial],
+    );
+
+    const upgradeWorkspace = useCallback(
+        async (planId: string, cadence: 'monthly' | 'yearly') => {
+            if (!selectedOrganization) return;
+            setError(null);
+            setNotification(null);
+            const result = await upgradePlan(planId, cadence, {
+                organizationId: selectedOrganization.organization.id,
+            });
+            if (result.status === 'requires-auth') {
+                return;
+            }
+            if (result.status === 'error') {
+                console.error(result.message);
+                setError('Unable to start checkout.');
+                return;
+            }
+            if (result.status === 'success') {
+                const checkoutUrl = result.data?.checkoutUrl;
+                if (checkoutUrl) {
+                    window.open(checkoutUrl, '_blank', 'noopener');
+                    setNotification({ type: 'info', message: 'Checkout opened in a new tab.' });
+                }
+            }
+        },
+        [selectedOrganization, upgradePlan],
+    );
+
+    const openBillingPortal = useCallback(async () => {
         if (!selectedOrganization) return;
-        if (!window.confirm('Delete this webhook endpoint? Events will stop sending immediately.')) {
+        setError(null);
+        setNotification(null);
+        const result = await openPortal({ organizationId: selectedOrganization.organization.id });
+        if (result.status === 'requires-auth') {
             return;
         }
-        setError(null);
-        setNotification(null);
-        setDeletingWebhookId(webhookId);
-        try {
-            await apiService.deleteWebhook(selectedOrganization.organization.id, webhookId);
-            setWebhooks(prev => prev.filter(webhook => webhook.id !== webhookId));
-            setNotification({ type: 'info', message: 'Webhook deleted.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to delete webhook.');
-        } finally {
-            setDeletingWebhookId(null);
-        }
-    };
-
-    const handleTestWebhook = async (webhookId: string) => {
-        if (!selectedOrganization) return;
-        setError(null);
-        setNotification(null);
-        setTestingWebhookId(webhookId);
-        try {
-            const result = await apiService.testWebhook(selectedOrganization.organization.id, webhookId);
-            const now = new Date().toISOString();
-            setWebhooks(prev =>
-                prev.map(webhook =>
-                    webhook.id === webhookId
-                        ? {
-                              ...webhook,
-                              lastDeliveredAt: result?.delivered ? now : webhook.lastDeliveredAt,
-                              lastFailureAt: result?.delivered ? webhook.lastFailureAt : now,
-                          }
-                        : webhook,
-                ),
-            );
-            if (result?.delivered) {
-                const statusDetails = result.status ? ` (status ${result.status})` : '';
-                setNotification({ type: 'success', message: `Test webhook delivered${statusDetails}.` });
-            } else {
-                setNotification({ type: 'info', message: 'Test webhook request could not be delivered.' });
-            }
-        } catch (err) {
-            console.error(err);
-            setError('Unable to send test webhook.');
-        } finally {
-            setTestingWebhookId(null);
-        }
-    };
-
-    const handleChangeMemberRole = async (memberId: string, role: OrganizationRole) => {
-        if (!selectedOrganization) return;
-        setError(null);
-        setNotification(null);
-        setUpdatingMemberId(memberId);
-        try {
-            const membership = await apiService.updateMemberRole(selectedOrganization.organization.id, memberId, role);
-            setMembers(prev =>
-                prev.map(member =>
-                    member.membership.id === memberId
-                        ? { ...member, membership: { ...member.membership, role: membership.role, lastActiveAt: membership.lastActiveAt } }
-                        : member,
-                ),
-            );
-            setNotification({ type: 'success', message: 'Member role updated.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to update member role.');
-        } finally {
-            setUpdatingMemberId(null);
-        }
-    };
-
-    const handleRemoveMember = async (memberId: string) => {
-        if (!selectedOrganization) return;
-        if (!window.confirm('Remove this member from the workspace?')) {
-            return;
-        }
-        setError(null);
-        setNotification(null);
-        setRemovingMemberId(memberId);
-        try {
-            await apiService.removeMember(selectedOrganization.organization.id, memberId);
-            setMembers(prev => prev.filter(member => member.membership.id !== memberId));
-            setNotification({ type: 'info', message: 'Member removed.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to remove member.');
-        } finally {
-            setRemovingMemberId(null);
-        }
-    };
-
-    const handleStartTrial = async (planId: string) => {
-        if (!selectedOrganization) return;
-        setBillingActionLoading(true);
-        setError(null);
-        setNotification(null);
-        try {
-            await apiService.startTrial(planId, selectedOrganization.organization.id);
-            await refreshUsage(selectedOrganization.organization.id);
-            setNotification({ type: 'success', message: 'Trial started for this workspace.' });
-        } catch (err) {
-            console.error(err);
-            setError('Unable to start a trial.');
-        } finally {
-            setBillingActionLoading(false);
-        }
-    };
-
-    const handleUpgrade = async (planId: string, cadence: 'monthly' | 'yearly') => {
-        if (!selectedOrganization) return;
-        setBillingActionLoading(true);
-        setError(null);
-        setNotification(null);
-        try {
-            const session = await apiService.createCheckoutSession(
-                planId,
-                cadence,
-                selectedOrganization.organization.id,
-            );
-            if (session?.checkoutUrl) {
-                window.open(session.checkoutUrl, '_blank', 'noopener');
-                setNotification({ type: 'info', message: 'Checkout opened in a new tab.' });
-            }
-        } catch (err) {
-            console.error(err);
-            setError('Unable to start checkout.');
-        } finally {
-            setBillingActionLoading(false);
-        }
-    };
-
-    const handleOpenPortal = async () => {
-        if (!selectedOrganization) return;
-        setBillingActionLoading(true);
-        setError(null);
-        setNotification(null);
-        try {
-            const portal = await apiService.openBillingPortal(selectedOrganization.organization.id);
-            if (portal?.url) {
-                window.open(portal.url, '_blank', 'noopener');
-            }
-        } catch (err) {
-            console.error(err);
+        if (result.status === 'error') {
+            console.error(result.message);
             setError('Unable to open billing portal.');
-        } finally {
-            setBillingActionLoading(false);
+            return;
         }
-    };
+        if (result.status === 'success') {
+            const portalUrl = result.data?.url;
+            if (portalUrl) {
+                window.open(portalUrl, '_blank', 'noopener');
+            }
+        }
+    }, [openPortal, selectedOrganization]);
 
-    if (loading && organizations.length === 0) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[#05070f] text-slate-300">
-                <p className="text-xs font-semibold uppercase tracking-[0.45em] text-indigo-200/80">
-                    Preparing workspace console…
-                </p>
-            </div>
-        );
-    }
+    const guardableHandlers = useMemo(
+        () => ({
+            switchOrganization: switchOrganizationAction,
+            inviteMember,
+            createApiKey,
+            createWebhook,
+            saveAuthPolicy,
+            createWorkspace,
+            revokeInvitation,
+            revokeApiKey,
+            exportAuditLog,
+            deleteWebhook,
+            testWebhook,
+            changeMemberRole,
+            removeMember,
+            startTrial: startTrialForWorkspace,
+            upgrade: upgradeWorkspace,
+            openPortal: openBillingPortal,
+        }),
+        [
+            changeMemberRole,
+            createApiKey,
+            createWebhook,
+            createWorkspace,
+            deleteWebhook,
+            exportAuditLog,
+            inviteMember,
+            openBillingPortal,
+            removeMember,
+            revokeApiKey,
+            revokeInvitation,
+            saveAuthPolicy,
+            startTrialForWorkspace,
+            switchOrganizationAction,
+            testWebhook,
+            upgradeWorkspace,
+        ],
+    );
+
+    const {
+        switchOrganization: handleSwitchOrganization,
+        inviteMember: handleInvite,
+        createApiKey: handleCreateApiKey,
+        createWebhook: handleCreateWebhook,
+        saveAuthPolicy: handleSaveAuthPolicy,
+        createWorkspace: handleCreateWorkspace,
+        revokeInvitation: handleRevokeInvitation,
+        revokeApiKey: handleRevokeApiKey,
+        exportAuditLog: handleExportAuditLog,
+        deleteWebhook: handleDeleteWebhook,
+        testWebhook: handleTestWebhook,
+        changeMemberRole: handleChangeMemberRole,
+        removeMember: handleRemoveMember,
+        startTrial: handleStartTrial,
+        upgrade: handleUpgrade,
+        openPortal: handleOpenPortal,
+    } = useGuardedHandlers(guardWithAuth, guardableHandlers);
 
     const canManagePolicies = selectedOrganization
         ? ['owner', 'admin'].includes(selectedOrganization.membership.role)
@@ -639,32 +727,46 @@ const WorkspaceSettings: React.FC = () => {
     );
 
     return (
-        <AppShell
+        <ConsoleScaffold
+            state={consoleState}
             eyebrow="Operations"
             title="Workspace command center"
-            description="Administer organizations, rotate credentials, and monitor automations with a Nimbus Guardian inspired interface."
-            actions={headerActions}
-            headerContent={
-                <WorkspaceSummaryBar
-                    organization={selectedOrganization}
-                    usage={usageSnapshot}
-                    isLoading={loading || detailLoading || isUsageLoading}
-                />
-            }
-        >
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 sm:px-10">
+        description="Administer organizations, rotate credentials, and monitor automations with a Nimbus Guardian inspired interface."
+        actions={headerActions}
+        summaryOrganization={selectedOrganization}
+        summaryUsage={usageSnapshot}
+        summaryLoading={
+            !bootstrapError && (isBootstrapping || detailLoading || isUsageLoading)
+        }
+        isLoading={isBootstrapping && organizations.length === 0}
+        loadingEyebrow="Bootstrapping"
+        loadingMessage="Preparing workspace console…"
+        loadingHint="Loading organizations, credentials, and audit controls."
+        isError={Boolean(bootstrapError)}
+        errorEyebrow="Workspace unavailable"
+        errorTitle="Unable to open workspace settings"
+        errorMessage={bootstrapError ?? undefined}
+        errorHint="We couldn't load your organization details. Retry once your connection stabilizes."
+        errorActionLabel="Retry"
+        onRetry={retryBootstrap}
+        banner={(
+            <>
                 {error && <NotificationBanner type="error" message={error} onDismiss={() => setError(null)} />}
                 {notification && (
                     <NotificationBanner
-                        type={notification.type}
-                        message={notification.message}
-                        onDismiss={() => setNotification(null)}
-                    />
-                )}
-
+                            type={notification.type}
+                            message={notification.message}
+                            onDismiss={() => setNotification(null)}
+                        />
+                    )}
+                </>
+            )}
+            showSidebar={false}
+        >
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 sm:px-10">
                 <WorkspaceHeader
                     organizations={organizations}
-                    selectedOrganization={selectedOrganization}
+                    selectedOrganization={selectedOrganization ?? undefined}
                     isSwitching={isSwitchingOrg}
                     newWorkspaceName={newWorkspaceName}
                     onWorkspaceNameChange={setNewWorkspaceName}
@@ -745,7 +847,7 @@ const WorkspaceSettings: React.FC = () => {
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <BillingSummary
-                        authState={workspaceAuthState}
+                        authState={authState}
                         plans={billingPlans}
                         usage={usageSnapshot}
                         onStartTrial={handleStartTrial}
@@ -763,7 +865,7 @@ const WorkspaceSettings: React.FC = () => {
                     />
                 </div>
             </div>
-        </AppShell>
+        </ConsoleScaffold>
     );
 };
 

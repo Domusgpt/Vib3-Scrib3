@@ -24,6 +24,7 @@ import {
     WebhookEvent,
     WebhookSubscription,
 } from '../types';
+import { clientEnv } from '../utils/clientEnv';
 
 class ApiError extends Error {
     status: number;
@@ -34,10 +35,26 @@ class ApiError extends Error {
     }
 }
 
+const withBaseUrl = (path: string) => {
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
 
-const fetch_retry = async (url: RequestInfo | URL, options: RequestInit | undefined, n: number): Promise<Response> => {
+    if (!clientEnv.API_BASE_URL) {
+        return path;
+    }
+
+    if (path.startsWith('/')) {
+        return `${clientEnv.API_BASE_URL}${path}`;
+    }
+
+    return `${clientEnv.API_BASE_URL}/${path}`;
+};
+
+const fetch_retry = async (url: string, options: RequestInit | undefined, n: number): Promise<Response> => {
+    const target = withBaseUrl(url);
     try {
-        return await fetch(url, options);
+        return await fetch(target, options);
     } catch (err) {
         if (n === 1) throw err;
         // Exponential backoff
@@ -75,10 +92,15 @@ const handleResponse = async (res: Response) => {
 
 const apiRequest = async (url: string, options: RequestInit = {}) => {
     try {
-        const res = await fetch_retry(url, {
-            ...options,
-            headers: { 'Content-Type': 'application/json', ...options.headers },
-        }, 3);
+        const res = await fetch_retry(
+            url,
+            {
+                credentials: 'include',
+                ...options,
+                headers: { 'Content-Type': 'application/json', ...options.headers },
+            },
+            3,
+        );
         return handleResponse(res);
     } catch (err) {
         if (err instanceof ApiError) {
@@ -91,11 +113,25 @@ const apiRequest = async (url: string, options: RequestInit = {}) => {
 };
 
 
+const DEFAULT_AUTH_STATE: AuthState = {
+    isAuthenticated: false,
+    user: null,
+    license: null,
+    subscription: null,
+    usage: null,
+};
+
 export const getAuthState = async (): Promise<AuthState> => {
     try {
-        const res = await fetch('/auth/user');
+        const res = await fetch_retry(
+            '/auth/user',
+            {
+                credentials: 'include',
+            },
+            3,
+        );
         if (res.status === 401 || res.status === 404) {
-            return { isAuthenticated: false, user: null, license: null, subscription: null, usage: null };
+            return DEFAULT_AUTH_STATE;
         }
         return handleResponse(res);
     } catch (err) {

@@ -15,7 +15,7 @@ const COLORS: Record<NotificationType, string> = {
     info: 'border-sky-400/30 bg-sky-500/10 text-sky-100',
 };
 
-const ICONS: Record<NotificationType, JSX.Element> = {
+const ICONS: Record<NotificationType, React.ReactElement> = {
     error: <XMarkIcon className="h-5 w-5" />,
     success: <CheckCircleIcon className="h-5 w-5" />,
     info: <LightningBoltIcon className="h-5 w-5" />,
