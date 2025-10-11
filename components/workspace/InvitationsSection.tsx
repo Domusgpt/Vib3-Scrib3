@@ -7,8 +7,8 @@ interface InvitationsSectionProps {
     role: OrganizationRole;
     onEmailChange: (value: string) => void;
     onRoleChange: (role: OrganizationRole) => void;
-    onInvite: () => void;
-    onRevoke: (invitationId: string) => void;
+    onInvite: () => void | Promise<void>;
+    onRevoke: (invitationId: string) => void | Promise<void>;
     isInviting: boolean;
     revokingInvitationId: string | null;
 }
@@ -54,7 +54,9 @@ const InvitationsSection: React.FC<InvitationsSectionProps> = ({
                     ))}
                 </select>
                 <button
-                    onClick={onInvite}
+                    onClick={() => {
+                        void onInvite();
+                    }}
                     className="rounded-2xl border border-indigo-400/60 bg-indigo-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-indigo-500 disabled:border-white/20 disabled:bg-slate-700"
                     disabled={!email || isInviting}
                 >
@@ -83,7 +85,9 @@ const InvitationsSection: React.FC<InvitationsSectionProps> = ({
                             </span>
                             {invitation.status === 'pending' && (
                                 <button
-                                    onClick={() => onRevoke(invitation.id)}
+                                    onClick={() => {
+                                        void onRevoke(invitation.id);
+                                    }}
                                     className="rounded-2xl border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10"
                                     disabled={revokingInvitationId === invitation.id}
                                 >
