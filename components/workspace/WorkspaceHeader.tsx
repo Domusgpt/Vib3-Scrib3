@@ -7,8 +7,8 @@ interface WorkspaceHeaderProps {
     isSwitching: boolean;
     newWorkspaceName: string;
     onWorkspaceNameChange: (value: string) => void;
-    onCreateWorkspace: () => void;
-    onSelectOrganization: (organizationId: string) => void;
+    onCreateWorkspace: () => void | Promise<void>;
+    onSelectOrganization: (organizationId: string) => void | Promise<void>;
     isCreatingWorkspace: boolean;
 }
 
@@ -51,7 +51,9 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <select
                         value={selectedOrganization?.organization.id ?? ''}
-                        onChange={event => onSelectOrganization(event.target.value)}
+                        onChange={event => {
+                            void onSelectOrganization(event.target.value);
+                        }}
                         className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-slate-200 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                         disabled={organizations.length === 0 || isSwitching}
                     >
@@ -69,7 +71,9 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                             onChange={event => onWorkspaceNameChange(event.target.value)}
                         />
                         <button
-                            onClick={onCreateWorkspace}
+                            onClick={() => {
+                                void onCreateWorkspace();
+                            }}
                             className="rounded-2xl border border-indigo-400/60 bg-indigo-500/70 px-4 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-indigo-500 disabled:border-white/20 disabled:bg-slate-700"
                             disabled={isCreatingWorkspace || !newWorkspaceName.trim()}
                         >

@@ -72,11 +72,42 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 PAGERDUTY_ROUTING_KEY=...
 ```
 
+Optionally, add a root `.env` file to customize the client release settings:
+
+```
+VITE_API_BASE_URL=https://console.yourdomain.com        # overrides the API origin for production builds
+VITE_RELEASE_CHANNEL=production                         # surfaced in analytics & error telemetry
+VITE_DEV_API_URL=http://localhost:3001                  # local override for Vite's proxy (defaults to 3001)
+```
+
 ### 2.4 Run Locally
 ```bash
-npm run server
+npm run dev        # start the Vite client on http://localhost:3000
+npm run server     # start the API + session server on http://localhost:3001
 ```
-Browse to `http://localhost:3001`. The Express server serves the compiled client from `dist/`.
+Use the Vite dev server during development so the client hot-reloads while the Express API proxies data. For a production-like
+test, run `npm run build` once and then start only `npm run server` (it serves the assets from `dist/`).
+
+### 2.5 Release Readiness Sweep
+
+```bash
+npm run release:verify
+```
+
+The composite script runs type-checking, the Vitest regression suite, and client/server builds in sequence. It matches the
+release checklist and is safe to wire into external CI/CD tooling.
+
+### 2.6 Run Backend Regression Tests
+
+```bash
+npm run test
+```
+
+The test runner executes the server Vitest suite (located under `server/__tests__`), covering the OAuth callback response shape
+and license guard middleware so privileged routes stay protected.
+
+> 📦 Looking for a quick release checklist? See [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) for the exact commands and smoke
+tests required to ship the MVP build.
 
 ---
 
