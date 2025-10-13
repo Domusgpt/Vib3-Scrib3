@@ -11,6 +11,7 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().url().optional(),
   API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   FACEBOOK_APP_ID: z.string().optional(),

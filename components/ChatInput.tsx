@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
+import { LLMProvider } from '../types';
 import { SendIcon } from './icons';
 import Loader from './Loader';
+
+export interface ProviderOption {
+    value: LLMProvider;
+    label: string;
+    description: string;
+    badge?: string;
+    accentClass: string;
+}
 
 interface ChatInputProps {
     onSendMessage: (message: string) => void;
     isLoading: boolean;
+    provider: LLMProvider;
+    providerOptions: readonly ProviderOption[];
+    onProviderChange: (provider: LLMProvider) => void;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, provider, providerOptions, onProviderChange }) => {
     const [text, setText] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -27,6 +39,43 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
 
     return (
         <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_18px_38px_rgba(15,23,42,0.45)] backdrop-blur">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-300">LLM Provider</p>
+                <div className="flex flex-wrap gap-2">
+                    {providerOptions.map(option => {
+                        const isActive = option.value === provider;
+                        const activeClasses = isActive
+                            ? `bg-gradient-to-r ${option.accentClass} text-slate-950 shadow-[0_12px_28px_rgba(15,23,42,0.45)]`
+                            : 'bg-slate-950/40 text-slate-200 hover:bg-slate-900/60';
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                    if (!isActive) {
+                                        onProviderChange(option.value);
+                                    }
+                                }}
+                                disabled={isLoading}
+                                className={`group flex max-w-xs flex-col gap-1 rounded-2xl border border-white/10 px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-indigo-400/70 disabled:cursor-not-allowed disabled:opacity-70 ${activeClasses}`}
+                                aria-pressed={isActive}
+                            >
+                                <span className="flex items-center gap-2 text-sm font-semibold">
+                                    {option.label}
+                                    {option.badge && (
+                                        <span className="rounded-full bg-white/20 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wider text-white/90">
+                                            {option.badge}
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="text-xs text-slate-200/80 group-disabled:text-slate-200/60">
+                                    {option.description}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
             <form onSubmit={handleSubmit} className="flex items-end gap-3">
                 <textarea
                     value={text}

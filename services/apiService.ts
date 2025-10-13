@@ -9,6 +9,7 @@ import {
     IntegrationName,
     IntegrationSummary,
     Invitation,
+    LLMProvider,
     Membership,
     OrganizationAuthPolicy,
     OrganizationAuthPolicyUpdate,
@@ -139,6 +140,7 @@ export interface ContinueConversationPayload {
     context: {
         activeProfileId?: string | null;
     };
+    provider?: LLMProvider;
 }
 
 export const continueConversation = async (payload: ContinueConversationPayload): Promise<ChatMessage> => {
