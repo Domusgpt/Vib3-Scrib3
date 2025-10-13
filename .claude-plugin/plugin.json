@@ -1,0 +1,9 @@
+{
+  "name": "vib3-scribe",
+  "description": "Vib3-Scribe from Clear Seas Solutions helps teams orchestrate Parserator writing systems directly inside Claude.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Clear Seas Solutions",
+    "url": "https://clearseassolutions.com"
+  }
+}

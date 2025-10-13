@@ -1,0 +1,13 @@
+{
+  "name": "parserator-betas",
+  "owner": {
+    "name": "Clear Seas Solutions"
+  },
+  "plugins": [
+    {
+      "name": "vib3-scribe",
+      "source": "./",
+      "description": "Install Vib3-Scribe to guide Parserator ecosystem rollouts inside Claude."
+    }
+  ]
+}
