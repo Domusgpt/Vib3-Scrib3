@@ -1,0 +1,8 @@
+{
+  "onInstall": {
+    "message": "Vib3 Scribe rush plugin installed. Run /context-harvest then /style-sync to prime Claude before drafting."
+  },
+  "onUpdate": {
+    "message": "Vib3 Scribe rush plugin updated. Review new memory workflows with /plugin info."
+  }
+}

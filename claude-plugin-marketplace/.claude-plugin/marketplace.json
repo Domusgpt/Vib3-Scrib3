@@ -1,0 +1,13 @@
+{
+  "name": "vib3-scribe-rush-marketplace",
+  "owner": {
+    "name": "Vib3 Scribe"
+  },
+  "plugins": [
+    {
+      "name": "vib3-scribe-rush",
+      "source": "../claude-plugin",
+      "description": "Launch-readiness workflows that prime Claude with Vib3 context and style memories."
+    }
+  ]
+}
