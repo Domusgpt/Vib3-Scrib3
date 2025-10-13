@@ -115,6 +115,7 @@ All endpoints live under `BASE_URL` and respond with JSON.
 ### 4.2 Profiles
 - `GET /api/profiles` – list user profiles
 - `POST /api/profiles` – create profile (manual override)
+- `GET /api/profiles/active` – resolve the active profile (falls back to the newest profile when none is selected)
 - `POST /api/profiles/active` – set active profile in session
 
 ### 4.3 Chat
@@ -148,6 +149,11 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - `GET /api/audit/:organizationId` – retrieve the latest workspace audit entries
 - `GET /api/audit/:organizationId/export?format=csv` – download audit history (supports optional `since=YYYY-MM-DD`)
 
+### 4.7 Claude Memory
+- `POST /api/memory` – persist context, style, or briefing memories for the signed-in user
+- `GET /api/memory` – list memories (supports `category` + `limit` filters)
+- `GET /api/memory/primer` – retrieve the freshest context/style pair plus refresh guidance
+
 ---
 
 ## 5. Frontend Product Notes
@@ -171,5 +177,6 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - Wire the webhook delivery queue to a background worker (BullMQ/SQS) for guaranteed delivery semantics.
 - Extend API key scopes to cover upcoming modules (analytics exports, knowledge bases) and surface key rotation reminders or expirations in-product.
 - Add scheduled audit-log archival/retention policies (S3, configurable retention windows) on top of the new CSV export surface.
+- Package shared launch workflows in the bundled Claude Code plugin (`docs/CLAUDE_CODE_PLUGIN.md`), using `/context-harvest`, `/style-sync`, `/memory-primer`, and the `/api/memory` + `/api/memory/primer` endpoints to keep Claude's memory aligned with Vib3 Scribe profiles as release rituals evolve.
 
 Scribe AI now ships with a production-ready architecture, monetization hooks, and a cohesive user experience that can grow into an enterprise-grade writing copilot.

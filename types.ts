@@ -87,6 +87,27 @@ export interface StyleProfile {
   createdAt: string;
 }
 
+export type ClaudeMemoryCategory = 'context' | 'style' | 'briefing';
+
+export interface ClaudeMemorySourceArtifact {
+  label: string;
+  url?: string;
+  excerpt?: string;
+}
+
+export interface ClaudeMemory {
+  id: string;
+  userId: string;
+  category: ClaudeMemoryCategory;
+  title: string;
+  summary: string;
+  highlights: string[];
+  sourceArtifacts: ClaudeMemorySourceArtifact[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface License {
   id: string;
   userId: string;

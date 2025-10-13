@@ -81,6 +81,7 @@ export const seedDatabase = async () => {
   db.data.apiKeys ??= [];
   db.data.webhooks ??= [];
   db.data.auditLogs ??= [];
+  db.data.claudeMemories ??= [];
 
   await db.write();
 };
