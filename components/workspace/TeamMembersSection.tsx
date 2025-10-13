@@ -3,8 +3,8 @@ import { OrganizationMember, OrganizationRole } from '../../types';
 
 interface TeamMembersSectionProps {
     members: OrganizationMember[];
-    onChangeRole: (memberId: string, role: OrganizationRole) => void;
-    onRemoveMember: (memberId: string) => void;
+    onChangeRole: (memberId: string, role: OrganizationRole) => void | Promise<void>;
+    onRemoveMember: (memberId: string) => void | Promise<void>;
     updatingMemberId: string | null;
     removingMemberId: string | null;
 }
@@ -57,7 +57,9 @@ const TeamMembersSection: React.FC<TeamMembersSectionProps> = ({
                                     <span className="uppercase tracking-[0.35em] text-slate-500">Role</span>
                                     <select
                                         value={membership.role}
-                                        onChange={event => onChangeRole(membership.id, event.target.value as OrganizationRole)}
+                                        onChange={event => {
+                                            void onChangeRole(membership.id, event.target.value as OrganizationRole);
+                                        }}
                                         disabled={isOwner || updatingMemberId === membership.id}
                                         className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-1 text-xs text-slate-100 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                                     >
@@ -70,7 +72,9 @@ const TeamMembersSection: React.FC<TeamMembersSectionProps> = ({
                                     {updatingMemberId === membership.id && <span className="text-indigo-200">Updating…</span>}
                                 </div>
                                 <button
-                                    onClick={() => onRemoveMember(membership.id)}
+                                    onClick={() => {
+                                        void onRemoveMember(membership.id);
+                                    }}
                                     className="self-start rounded-2xl border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/10 sm:self-auto"
                                     disabled={isOwner || removingMemberId === membership.id}
                                 >

@@ -113,7 +113,7 @@ const AccessPoliciesSection: React.FC<AccessPoliciesSectionProps> = ({
             return;
         }
         setLocalError(null);
-        onSave({
+        void onSave({
             enforcement: draft.enforcement,
             allowedProviders: draft.allowedProviders,
             note: draft.note,
