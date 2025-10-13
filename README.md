@@ -171,5 +171,6 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - Wire the webhook delivery queue to a background worker (BullMQ/SQS) for guaranteed delivery semantics.
 - Extend API key scopes to cover upcoming modules (analytics exports, knowledge bases) and surface key rotation reminders or expirations in-product.
 - Add scheduled audit-log archival/retention policies (S3, configurable retention windows) on top of the new CSV export surface.
+- Package shared launch workflows in the bundled Claude Code plugin (`docs/CLAUDE_CODE_PLUGIN.md`) and expand commands/agents as release rituals evolve.
 
 Scribe AI now ships with a production-ready architecture, monetization hooks, and a cohesive user experience that can grow into an enterprise-grade writing copilot.
