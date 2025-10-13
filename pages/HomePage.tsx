@@ -1,14 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatView from '../components/chat/ChatView';
 import ChatInput from '../components/ChatInput';
 import ProfileModal from '../components/ProfileModal';
 import ConsoleScaffold from '../components/console/ConsoleScaffold';
 import OnboardingChecklist, { OnboardingStep } from '../components/onboarding/OnboardingChecklist';
-import { ChatMessage, IntegrationName, MessageAuthor, ProfileSource } from '../types';
+import { ChatMessage, IntegrationName, LLMProvider, MessageAuthor, ProfileSource } from '../types';
 import * as apiService from '../services/apiService';
 import { useConsolePageState } from '../hooks/useConsolePageState';
 import { useGuardedHandlers } from '../hooks/useGuardedHandlers';
+
+const PROVIDER_OPTIONS = [
+    {
+        value: LLMProvider.CLAUDE,
+        label: 'Claude Code (Rush)',
+        description: 'Anthropic-powered rush co-pilot that blends code edits with your voice.',
+        badge: 'Rush MVP',
+        accentClass: 'from-amber-400/85 via-orange-500/80 to-rose-500/75',
+    },
+    {
+        value: LLMProvider.GEMINI,
+        label: 'Gemini Orchestrator',
+        description: 'Google Gemini workflow tuned for lightning-fast style synthesis.',
+        badge: 'Default',
+        accentClass: 'from-sky-500/80 via-indigo-500/80 to-blue-600/75',
+    },
+] as const;
+
+type ProviderOption = (typeof PROVIDER_OPTIONS)[number];
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
@@ -33,6 +52,13 @@ const HomePage: React.FC = () => {
         usageSnapshot,
     } = consoleState;
 
+    const providerLookup = useMemo(
+        () => new Map<LLMProvider, ProviderOption>(PROVIDER_OPTIONS.map(option => [option.value, option])),
+        [],
+    );
+    const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(LLMProvider.CLAUDE);
+    const hasAnnouncedProviderChange = useRef(false);
+
     const activeOrgId = activeOrganization?.organization.id ?? null;
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,10 +72,36 @@ const HomePage: React.FC = () => {
         setProfileModalOpen(true);
     }, []);
 
+    const handleProviderChange = useCallback((provider: LLMProvider) => {
+        setSelectedProvider(current => (current === provider ? current : provider));
+    }, []);
+
+    useEffect(() => {
+        if (!hasAnnouncedProviderChange.current) {
+            hasAnnouncedProviderChange.current = true;
+            return;
+        }
+
+        const providerMeta = providerLookup.get(selectedProvider);
+        if (!providerMeta) {
+            return;
+        }
+
+        setMessages(prev => [
+            ...prev,
+            {
+                author: MessageAuthor.SYSTEM,
+                text: `Switched to ${providerMeta.label}. ${providerMeta.description}`,
+            },
+        ]);
+    }, [providerLookup, selectedProvider]);
+
     useEffect(() => {
         if (isBootstrapping) {
             return;
         }
+
+        const providerMeta = providerLookup.get(selectedProvider);
 
         setMessages(prev => {
             if (prev.length > 0) {
@@ -60,11 +112,26 @@ const HomePage: React.FC = () => {
                 return [{ author: MessageAuthor.SYSTEM, text: bootstrapError }];
             }
 
-            return authState.isAuthenticated
-                ? [{ author: MessageAuthor.BOT, text: "Welcome back! I'm ready to assist you. Select a style profile or ask me to create a new one." }]
-                : [{ author: MessageAuthor.BOT, text: 'Welcome to Scribe AI! Please sign in to create writing profiles and start generating text.' }];
+            if (authState.isAuthenticated) {
+                const providerGreeting = providerMeta
+                    ? `${providerMeta.label} is dialed in. ${providerMeta.description}`
+                    : "I'm ready to assist you.";
+                return [
+                    {
+                        author: MessageAuthor.BOT,
+                        text: `Welcome back! ${providerGreeting} Select a style profile or ask me to create a new one.`,
+                    },
+                ];
+            }
+
+            return [
+                {
+                    author: MessageAuthor.BOT,
+                    text: 'Welcome to Scribe AI! Please sign in to create writing profiles and start generating text.',
+                },
+            ];
         });
-    }, [authState.isAuthenticated, bootstrapError, isBootstrapping]);
+    }, [authState.isAuthenticated, bootstrapError, isBootstrapping, providerLookup, selectedProvider]);
 
     const sendMessage = useCallback(
         async (text: string) => {
@@ -78,6 +145,7 @@ const HomePage: React.FC = () => {
                     prompt: text,
                     history,
                     context: { activeProfileId },
+                    provider: selectedProvider,
                 });
 
                 if (response.text?.includes('created a new style profile')) {
@@ -87,16 +155,28 @@ const HomePage: React.FC = () => {
                 setMessages(prev => [...prev, response]);
                 await refreshUsage(activeOrgId ?? undefined);
             } catch (error) {
-                const errorMessage: ChatMessage = {
-                    author: MessageAuthor.SYSTEM,
-                    text: error instanceof Error ? `Error: ${error.message}` : 'An unknown error occurred.',
-                };
-                setMessages(prev => [...prev, errorMessage]);
+                const rawMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+                if (error instanceof Error && /anthropic api key is not configured/i.test(error.message)) {
+                    setSelectedProvider(LLMProvider.GEMINI);
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            author: MessageAuthor.SYSTEM,
+                            text: 'Claude Code requires an Anthropic API key. Falling back to the Gemini orchestrator.',
+                        },
+                    ]);
+                } else {
+                    const errorMessage: ChatMessage = {
+                        author: MessageAuthor.SYSTEM,
+                        text: `Error: ${rawMessage}`,
+                    };
+                    setMessages(prev => [...prev, errorMessage]);
+                }
             } finally {
                 setIsLoading(false);
             }
         },
-        [activeOrgId, activeProfileId, messages, reloadProfiles, refreshUsage],
+        [activeOrgId, activeProfileId, messages, reloadProfiles, refreshUsage, selectedProvider],
     );
 
     const selectProfileWithAnnouncement = useCallback(
@@ -156,6 +236,7 @@ const HomePage: React.FC = () => {
                     prompt: newText,
                     history: historyUpToIndex,
                     context: { activeProfileId },
+                    provider: selectedProvider,
                 });
                 if (response.text?.includes('created a new style profile')) {
                     await reloadProfiles();
@@ -163,16 +244,28 @@ const HomePage: React.FC = () => {
                 setMessages([...historyUpToIndex, userMessageToResend, response]);
                 await refreshUsage(activeOrgId ?? undefined);
             } catch (error) {
-                const errorMessage: ChatMessage = {
-                    author: MessageAuthor.SYSTEM,
-                    text: error instanceof Error ? error.message : 'An unknown error occurred.',
-                };
-                setMessages([...historyUpToIndex, userMessageToResend, errorMessage]);
+                if (error instanceof Error && /anthropic api key is not configured/i.test(error.message)) {
+                    setSelectedProvider(LLMProvider.GEMINI);
+                    setMessages(prev => [
+                        ...historyUpToIndex,
+                        userMessageToResend,
+                        {
+                            author: MessageAuthor.SYSTEM,
+                            text: 'Claude Code requires an Anthropic API key. Falling back to the Gemini orchestrator.',
+                        },
+                    ]);
+                } else {
+                    const errorMessage: ChatMessage = {
+                        author: MessageAuthor.SYSTEM,
+                        text: error instanceof Error ? error.message : 'An unknown error occurred.',
+                    };
+                    setMessages([...historyUpToIndex, userMessageToResend, errorMessage]);
+                }
             } finally {
                 setIsLoading(false);
             }
         },
-        [activeOrgId, activeProfileId, messages, reloadProfiles, refreshUsage],
+        [activeOrgId, activeProfileId, messages, reloadProfiles, refreshUsage, selectedProvider],
     );
 
     const disconnectIntegration = useCallback(
@@ -466,7 +559,13 @@ const HomePage: React.FC = () => {
                             <ChatView messages={messages} isLoading={isLoading} onEditMessage={handleEditMessage} />
                         </div>
                     </div>
-                    <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading || isBootstrapping} />
+                    <ChatInput
+                        onSendMessage={handleSendMessage}
+                        isLoading={isLoading || isBootstrapping}
+                        provider={selectedProvider}
+                        providerOptions={PROVIDER_OPTIONS}
+                        onProviderChange={handleProviderChange}
+                    />
                 </div>
             </ConsoleScaffold>
             <ProfileModal

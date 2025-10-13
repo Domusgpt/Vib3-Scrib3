@@ -26,6 +26,7 @@ export enum LLMProvider {
   GEMINI = 'gemini',
   OPENAI = 'openai',
   GROK = 'grok',
+  CLAUDE = 'claude',
 }
 
 export type IntegrationName = 'google' | 'facebook' | 'messages';

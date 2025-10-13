@@ -1,26 +1,53 @@
 import { GoogleGenAI, FunctionDeclaration, Type, Content } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 import { google } from 'googleapis';
 import { ChatMessage, FunctionCall, LLMProvider, MessageAuthor, ProfileSourceType } from '../../types';
 import { db } from '../../database/client';
 import { env } from '../../config/env';
 
-const geminiAI = new GoogleGenAI({ apiKey: env.API_KEY });
+const geminiClient = env.API_KEY ? new GoogleGenAI({ apiKey: env.API_KEY }) : null;
+const anthropicClient = env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }) : null;
 
-const scribeTools: FunctionDeclaration[] = [
+interface ToolPropertyDefinition {
+  type: 'string';
+  description: string;
+}
+
+interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, ToolPropertyDefinition>;
+    required: string[];
+  };
+}
+
+type ClaudeContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string };
+
+type ClaudeMessage = {
+  role: 'user' | 'assistant';
+  content: ClaudeContentBlock[];
+};
+
+const SCRIBE_TOOLS: ToolDefinition[] = [
   {
     name: 'createStyleProfile',
     description:
       "Analyzes a body of text to create a detailed writing style profile. This should be used when a user provides text and asks to create a profile, analyze their style, or learn how they write.",
     parameters: {
-      type: Type.OBJECT,
+      type: 'object',
       properties: {
         writingSamples: {
-          type: Type.STRING,
+          type: 'string',
           description:
             "A string containing a large sample of the user's writing (e.g., concatenated emails or messages).",
         },
         profileName: {
-          type: Type.STRING,
+          type: 'string',
           description: 'A descriptive name for the new profile, like "My Professional Email Style".',
         },
       },
@@ -32,10 +59,10 @@ const scribeTools: FunctionDeclaration[] = [
     description:
       "Writes a new piece of text based on a user's request, adhering to the currently active style profile. Use this for requests like \"write an email\", \"draft a response\", or \"rewrite this for me\".",
     parameters: {
-      type: Type.OBJECT,
+      type: 'object',
       properties: {
         prompt: {
-          type: Type.STRING,
+          type: 'string',
           description: "The user's specific writing request, e.g., \"An email to decline a meeting invite.\"",
         },
       },
@@ -47,10 +74,10 @@ const scribeTools: FunctionDeclaration[] = [
     description:
       'Fetches writing samples from a connected external service like Gmail or Facebook and automatically creates a new style profile from them. This should be used if the user asks to analyze their style from a specific source, e.g., "Analyze my emails".',
     parameters: {
-      type: Type.OBJECT,
+      type: 'object',
       properties: {
         source: {
-          type: Type.STRING,
+          type: 'string',
           description: 'The service to fetch from. Supported values: "gmail", "facebook".',
         },
       },
@@ -59,11 +86,79 @@ const scribeTools: FunctionDeclaration[] = [
   },
 ];
 
-export const continueConversation = async (requestBody: any): Promise<ChatMessage> => {
-  const { prompt, history, provider, context } = requestBody;
-  if (!env.API_KEY) {
+const geminiTools: FunctionDeclaration[] = SCRIBE_TOOLS.map(tool => ({
+  name: tool.name,
+  description: tool.description,
+  parameters: {
+    type: Type.OBJECT,
+    properties: Object.fromEntries(
+      Object.entries(tool.parameters.properties).map(([key, schema]) => [
+        key,
+        {
+          type: Type.STRING,
+          description: schema.description,
+        },
+      ]),
+    ),
+    required: tool.parameters.required,
+  },
+}));
+
+const anthropicTools = SCRIBE_TOOLS.map(tool => ({
+  name: tool.name,
+  description: tool.description,
+  input_schema: {
+    type: 'object' as const,
+    properties: Object.fromEntries(
+      Object.entries(tool.parameters.properties).map(([key, schema]) => [
+        key,
+        {
+          type: schema.type,
+          description: schema.description,
+        },
+      ]),
+    ),
+    required: tool.parameters.required,
+  },
+}));
+
+const CLAUDE_MODEL = 'claude-3-5-sonnet-20240620';
+const CLAUDE_SYSTEM_PROMPT =
+  "You are Vib3 Scribe's rush Claude Code plugin. Coordinate with the available tools to manage writing style profiles, draft new copy, and ingest samples. Prefer tool calls over free-form guesses when the user asks to learn or apply their style.";
+
+const getGeminiClient = (): GoogleGenAI => {
+  if (!geminiClient) {
     throw new Error('Gemini API key is not configured. Please set API_KEY in the server environment.');
   }
+  return geminiClient;
+};
+
+const getAnthropicClient = (): Anthropic => {
+  if (!anthropicClient) {
+    throw new Error('Anthropic API key is not configured. Set ANTHROPIC_API_KEY to enable Claude Code.');
+  }
+  return anthropicClient;
+};
+
+interface ConversationArgs {
+  prompt?: string;
+  history: ChatMessage[];
+  provider?: LLMProvider;
+  context: any;
+}
+
+export const continueConversation = async (requestBody: any): Promise<ChatMessage> => {
+  const { prompt, history = [], provider = LLMProvider.GEMINI, context } = requestBody as ConversationArgs;
+
+  if (provider === LLMProvider.CLAUDE) {
+    return continueWithClaude({ prompt, history, context });
+  }
+
+  return continueWithGemini({ prompt, history, provider, context });
+};
+
+const continueWithGemini = async ({ prompt, history, provider, context }: ConversationArgs): Promise<ChatMessage> => {
+  const client = getGeminiClient();
   const model = provider === LLMProvider.OPENAI ? 'gpt-4-turbo' : 'gemini-2.5-flash';
 
   const contents = history.map(messageToContent);
@@ -72,34 +167,103 @@ export const continueConversation = async (requestBody: any): Promise<ChatMessag
   }
 
   for (let i = 0; i < 5; i++) {
-    const response = await geminiAI.models.generateContent({
+    const response = await client.models.generateContent({
       model,
       contents,
       config: {
-        tools: [{ functionDeclarations: scribeTools }],
+        tools: [{ functionDeclarations: geminiTools }],
       },
     });
 
-    const functionCalls = response.functionCalls;
-
-    if (!functionCalls || functionCalls.length === 0) {
+    const functionCalls = response.functionCalls ?? [];
+    if (functionCalls.length === 0) {
       return { author: MessageAuthor.BOT, text: response.text ?? '' };
     }
 
-    const fc = functionCalls[0];
-    if (!fc || !fc.name) {
-      return { author: MessageAuthor.BOT, text: response.text ?? '' };
+    for (const call of functionCalls) {
+      if (!call?.name) {
+        continue;
+      }
+
+      const toolResult = await executeTool(
+        { name: call.name, args: (call.args as Record<string, unknown>) ?? {} },
+        context,
+      );
+
+      contents.push({ role: 'model', parts: [{ functionCall: call }] });
+      contents.push({
+        role: 'user',
+        parts: [{ functionResponse: { name: call.name, response: toolResult } }],
+      });
     }
-    const toolResult = await executeTool(
-      { name: fc.name, args: (fc.args as Record<string, any>) ?? {} },
-      context,
+  }
+
+  return {
+    author: MessageAuthor.BOT,
+    text: 'I seem to be stuck in a loop. Could you please rephrase your request?',
+  };
+};
+
+const continueWithClaude = async ({ prompt, history, context }: ConversationArgs): Promise<ChatMessage> => {
+  const client = getAnthropicClient();
+
+  const messages: ClaudeMessage[] = history
+    .filter(message => Boolean(message.text))
+    .map(message => ({
+      role: message.author === MessageAuthor.USER ? 'user' : 'assistant',
+      content: [{ type: 'text', text: message.text ?? '' }],
+    }));
+
+  if (prompt) {
+    messages.push({ role: 'user', content: [{ type: 'text', text: prompt }] });
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const response = await client.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: CLAUDE_SYSTEM_PROMPT,
+      messages: messages as unknown as ClaudeMessage[],
+      tools: anthropicTools,
+    });
+
+    const responseContent = (response.content ?? []) as ClaudeContentBlock[];
+    const toolUses = responseContent.filter(
+      (block): block is { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } =>
+        block.type === 'tool_use',
     );
 
-    contents.push({ role: 'model', parts: [{ functionCall: fc }] });
-    contents.push({
-      role: 'user',
-      parts: [{ functionResponse: { name: fc.name, response: toolResult } }],
+    const textOutput = responseContent
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map(block => block.text)
+      .join('\n\n')
+      .trim();
+
+    if (toolUses.length === 0) {
+      return { author: MessageAuthor.BOT, text: textOutput };
+    }
+
+    messages.push({
+      role: 'assistant',
+      content: responseContent,
     });
+
+    for (const toolUse of toolUses) {
+      const toolResult = await executeTool(
+        { name: toolUse.name, args: (toolUse.input as Record<string, unknown>) ?? {} },
+        context,
+      );
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(toolResult),
+          },
+        ],
+      });
+    }
   }
 
   return {
@@ -173,7 +337,7 @@ export const executeTool = async (functionCall: FunctionCall, context: any): Pro
       return {
         success: true,
         message:
-          'Fetched placeholder Facebook messages. Due to Meta\'s privacy policies, live message fetching is a complex process and is not fully implemented in this demo.',
+          "Fetched placeholder Facebook messages. Due to Meta's privacy policies, live message fetching is a complex process and is not fully implemented in this demo.",
       };
     }
     return {
@@ -265,6 +429,7 @@ export async function fetchWritingSamples(source: 'gmail' | 'facebook', accessTo
 }
 
 export async function createStyleProfile(samples: string): Promise<string> {
+  const client = getGeminiClient();
   const model = 'gemini-2.5-flash';
   const prompt = `Analyze the following writing samples and create a detailed, structured profile of the author's writing style. The profile should be a list of key-value pairs. Cover these aspects: Tone (e.g., Formal, Casual, Witty), Diction (e.g., Simple, Complex, Technical), Sentence Structure (e.g., Short and direct, Long and flowing), Common Phrases, and Overall Vibe.
 
@@ -273,11 +438,12 @@ SAMPLES:
 ${samples}
 ---
 `;
-  const response = await geminiAI.models.generateContent({ model, contents: prompt });
+  const response = await client.models.generateContent({ model, contents: prompt });
   return response.text ?? '';
 }
 
 export async function writeWithStyle(prompt: string, style: string): Promise<string> {
+  const client = getGeminiClient();
   const model = 'gemini-2.5-flash';
   const systemInstruction = `You are a writing assistant. Your task is to write a response to the user's prompt, but you MUST strictly adhere to the provided writing style profile.
 
@@ -286,7 +452,7 @@ WRITING STYLE PROFILE:
 ${style}
 ---
 `;
-  const response = await geminiAI.models.generateContent({
+  const response = await client.models.generateContent({
     model,
     contents: prompt,
     config: { systemInstruction },

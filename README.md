@@ -63,6 +63,7 @@ SESSION_SECRET=super_secure_value
 BASE_URL=http://localhost:3001
 CLIENT_ORIGIN=http://localhost:3000
 API_KEY=<google_gemini_key>
+ANTHROPIC_API_KEY=<anthropic_key_for_claude_code>
 OPENAI_API_KEY=<optional_openai_key>
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
@@ -147,6 +148,13 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - `POST /api/organizations/:id/webhooks/:webhookId/test` – fire a signed test payload
 - `GET /api/audit/:organizationId` – retrieve the latest workspace audit entries
 - `GET /api/audit/:organizationId/export?format=csv` – download audit history (supports optional `since=YYYY-MM-DD`)
+
+### 4.7 Claude Code Rush Plugin (MVP)
+- `GET /api/claude-code/manifest.json` – machine-readable manifest that Claude Code can ingest to discover the plugin
+- `GET /api/claude-code/openapi.json` – OpenAPI schema describing plugin operations
+- `POST /api/claude-code/messages` – run a chat turn against Scribe with Anthropic Claude, honoring organization API scopes
+- `GET /api/claude-code/profiles` – list the user’s style profiles when the API key includes `profiles:read`
+- `POST /api/claude-code/profiles/from-text` – generate a new style profile from raw samples using the rush workflow
 
 ---
 

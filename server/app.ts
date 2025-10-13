@@ -15,6 +15,7 @@ import apiKeyRoutes from './modules/api-keys/api-key.routes';
 import webhookRoutes from './modules/webhooks/webhook.routes';
 import auditRoutes from './modules/audit/audit.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
+import claudeCodeRoutes from './modules/plugins/claude-code/claude-code.routes';
 
 configurePassport();
 
@@ -40,6 +41,7 @@ export const createApp = () => {
   app.use('/api/audit', isAuthenticated, auditRoutes);
   app.use('/api/analytics', isAuthenticated, analyticsRoutes);
   app.use('/api/billing', billingRoutes);
+  app.use('/api/claude-code', claudeCodeRoutes);
 
   app.use(express.static(clientBuildPath));
 
