@@ -30,6 +30,7 @@ Use one authenticated account and one invited teammate to walk the happy path. F
 6. **Integrations hub** – Trigger a sample sync or disconnect for one connector and verify the status pill updates without needing a refresh.
 7. **Insights console** – Load `/insights` and confirm analytics cards render (pulse, trend, incidents) without API errors.
 8. **Audit log** – Visit the audit tab, filter or export, and confirm a CSV download is generated.
+9. **Claude plugin gating** – From Claude Code, run `/memory-primer` without an active Vib3 session. Confirm the flow records the operator via `POST /api/plugin-signups` (reason `memory-access`) and pauses until onboarding is complete. After authenticating, re-run the command to ensure `GET /api/memory/primer` returns context + style memories and briefings without errors.
 
 If any API request fails, capture the server log, stack trace, and repro steps before moving on.
 
