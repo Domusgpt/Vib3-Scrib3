@@ -37,7 +37,7 @@ Supporting layers:
 - `lib/logger` exposes a minimal structured logger used across modules.
 
 ### 1.3 Database & Data Model
-- Current persistence uses `lowdb` to persist `users`, `style_profiles`, `licenses`, `subscriptions`, `usage`, `billingPlans`, `organizations`, `memberships`, `invitations`, `apiKeys`, `webhooks`, and `auditLogs` in `server/db.json`.
+- Current persistence uses `lowdb` to persist `users`, `style_profiles`, `licenses`, `subscriptions`, `usage`, `billingPlans`, `organizations`, `memberships`, `invitations`, `apiKeys`, `webhooks`, `auditLogs`, `claudeMemories`, and `pluginSignups` in `server/db.json`.
 - `database/seed.ts` injects three default plans (Free, Pro, Enterprise) so monetization is live out of the box and initializes governance collections.
 - Usage records are stored per-user, per-month to enforce limits and power analytics.
 - Every authenticated user receives a personal workspace; teams can spawn additional workspaces with their own seats, API keys, and webhooks.
@@ -115,6 +115,7 @@ All endpoints live under `BASE_URL` and respond with JSON.
 ### 4.2 Profiles
 - `GET /api/profiles` – list user profiles
 - `POST /api/profiles` – create profile (manual override)
+- `GET /api/profiles/active` – resolve the active profile (falls back to the newest profile when none is selected)
 - `POST /api/profiles/active` – set active profile in session
 
 ### 4.3 Chat
@@ -148,6 +149,16 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - `GET /api/audit/:organizationId` – retrieve the latest workspace audit entries
 - `GET /api/audit/:organizationId/export?format=csv` – download audit history (supports optional `since=YYYY-MM-DD`)
 
+### 4.7 Claude Memory
+- `POST /api/memory` – persist context, style, or briefing memories for the signed-in user
+- `GET /api/memory` – list memories (supports `category` + `limit` filters)
+- `GET /api/memory/primer` – retrieve the freshest context/style pair plus refresh guidance
+
+### 4.8 Claude Plugin Onboarding
+- `POST /api/claude/signups` – capture rush plugin operators who request continued access to saved profiles or Vib3 automations
+- `GET /api/claude/signups` – (auth required) list captured signups so growth and success can prioritise outreach
+- `POST /api/claude/signups/convert` – (auth required) mark the current authenticated user as converted once they complete sign-in
+
 ---
 
 ## 5. Frontend Product Notes
@@ -171,5 +182,6 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - Wire the webhook delivery queue to a background worker (BullMQ/SQS) for guaranteed delivery semantics.
 - Extend API key scopes to cover upcoming modules (analytics exports, knowledge bases) and surface key rotation reminders or expirations in-product.
 - Add scheduled audit-log archival/retention policies (S3, configurable retention windows) on top of the new CSV export surface.
+- Package shared launch workflows in the bundled Claude Code plugin (`docs/CLAUDE_CODE_PLUGIN.md`), using `/context-harvest`, `/style-sync`, `/memory-primer`, `/account-handoff`, and the `/api/memory`, `/api/memory/primer`, and `/api/claude/signups` endpoints to keep Claude's memory aligned with Vib3 Scribe profiles as release rituals evolve while capturing warm signups.
 
 Scribe AI now ships with a production-ready architecture, monetization hooks, and a cohesive user experience that can grow into an enterprise-grade writing copilot.

@@ -1,0 +1,8 @@
+{
+  "onInstall": {
+    "message": "Vib3 Scribe rush plugin installed. Use /context-harvest and /style-sync to push memories via /api/memory, then /memory-primer before drafting and /account-handoff to log warm signups."
+  },
+  "onUpdate": {
+    "message": "Vib3 Scribe rush plugin updated. Hit /api/memory/primer, re-run /memory-primer, and capture interested operators with /account-handoff so the team can onboard them."
+  }
+}
