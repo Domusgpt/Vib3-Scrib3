@@ -1,5 +1,5 @@
 import { GoogleGenAI, FunctionDeclaration, Type, Content } from '@google/genai';
-import { google } from 'googleapis';
+import { google, gmail_v1 } from 'googleapis';
 import { ChatMessage, FunctionCall, LLMProvider, MessageAuthor, ProfileSourceType } from '../../types';
 import { db } from '../../database/client';
 import { env } from '../../config/env';
@@ -253,7 +253,7 @@ export async function fetchWritingSamples(source: 'gmail' | 'facebook', accessTo
     const res = await gmail.users.messages.list({ userId: 'me', q: 'in:sent', maxResults: 20 });
     const messages = res.data.messages || [];
     const emailContents = await Promise.all(
-      messages.map(async msg => {
+      messages.map(async (msg: gmail_v1.Schema$Message) => {
         const email = await gmail.users.messages.get({ userId: 'me', id: msg.id!, format: 'full' });
         const snippet = email.data.snippet;
         return snippet || '';
