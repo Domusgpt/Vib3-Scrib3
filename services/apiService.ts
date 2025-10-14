@@ -112,6 +112,16 @@ export const getProfiles = async (): Promise<StyleProfile[]> => {
     return apiRequest('/api/profiles');
 };
 
+export interface ActiveProfileResponse {
+    profile: StyleProfile;
+    activeProfileId: string;
+    isFallback: boolean;
+}
+
+export const getActiveProfile = async (): Promise<ActiveProfileResponse> => {
+    return apiRequest('/api/profiles/active');
+};
+
 export const setActiveProfile = async (id: string): Promise<{ activeProfileId: string }> => {
     return apiRequest('/api/profiles/active', {
         method: 'POST',
