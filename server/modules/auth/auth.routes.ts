@@ -4,6 +4,7 @@ import { billingService } from '../billing/billing.service';
 import { licenseService } from '../licenses/license.service';
 import { organizationService } from '../organizations/organization.service';
 import { db } from '../../database/client';
+import { pluginSignupService } from '../claude-plugin/plugin-signup.service';
 
 const router = Router();
 
@@ -49,6 +50,10 @@ router.get('/user', async (req: Request, res: Response) => {
       invitation.status === 'pending' &&
       invitation.email && req.user?.email && invitation.email.toLowerCase() === req.user.email.toLowerCase(),
   ) ?? [];
+
+  if (req.user.email) {
+    await pluginSignupService.markConverted(req.user.id, req.user.email);
+  }
 
   const [license, usage] = await Promise.all([
     licenseService.getLicenseForUser(req.user.id, activeOrganizationId ?? undefined),

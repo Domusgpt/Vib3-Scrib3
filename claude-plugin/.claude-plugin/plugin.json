@@ -1,7 +1,7 @@
 {
   "name": "vib3-scribe-rush",
-  "description": "Rush MVP workflows for Vib3 Scribe release readiness, memory priming, and Claude Code automation backed by Vib3's memory API.",
-  "version": "0.4.0",
+  "description": "Rush MVP workflows for Vib3 Scribe release readiness, memory priming, and signup capture backed by Vib3's memory API.",
+  "version": "0.5.0",
   "author": {
     "name": "Vib3 Scribe Team",
     "url": "https://example.com/vib3-scribe"

@@ -82,6 +82,7 @@ export const seedDatabase = async () => {
   db.data.webhooks ??= [];
   db.data.auditLogs ??= [];
   db.data.claudeMemories ??= [];
+  db.data.pluginSignups ??= [];
 
   await db.write();
 };

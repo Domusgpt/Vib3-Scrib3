@@ -39,6 +39,6 @@ Use this when you need Claude to understand the user's current initiatives, tone
    Replace `${jsonArtifacts}` with a JSON array (e.g., `[]` or structured entries) and keep the summary concise (<= 1k tokens) with clear references Claude should revisit.
 5. Share a short briefing (3–5 bullets) for the operator plus recommended prompts they can reuse in Claude Code.
 6. Suggest refreshing this context weekly or whenever major projects change.
-7. Hand off to `/memory-primer` so the operator can reconcile the stored memories with the latest Vib3 profile before drafting.
+7. Hand off to `/memory-primer` so the operator can reconcile the stored memories with the latest Vib3 profile before drafting. If they later ask for ongoing access, line up `/account-handoff` to capture their signup details.
 
 Always respect the user's privacy settings and follow internal data-handling policies when storing context in Claude's memory.

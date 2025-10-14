@@ -12,7 +12,7 @@ This local Claude Code marketplace bundles the `vib3-scribe-rush` plugin for rap
    ```shell
    /plugin install vib3-scribe-rush@vib3-scribe-rush-marketplace
    ```
-4. Restart Claude Code to register the new commands, then run `/context-harvest`, `/style-sync`, and `/memory-primer` to prime Claude's memory (now backed by the `/api/memory` + `/api/memory/primer` endpoints) before `/release-pulse`.
+4. Restart Claude Code to register the new commands, then run `/context-harvest`, `/style-sync`, `/memory-primer`, and `/account-handoff` to prime Claude's memory (via `/api/memory` + `/api/memory/primer`) and capture signup intent before `/release-pulse`.
 
 ## Sharing with the Team
 Commit this directory to the repo so trusted collaborators can enable it automatically via `.claude/settings.json` or their own marketplace listings.

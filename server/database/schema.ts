@@ -7,6 +7,7 @@ import {
   License,
   Membership,
   Organization,
+  PluginSignup,
   StyleProfile,
   Subscription,
   UsageRecord,
@@ -28,6 +29,7 @@ export interface DatabaseSchema {
   webhooks: WebhookSubscription[];
   auditLogs: AuditLog[];
   claudeMemories: ClaudeMemory[];
+  pluginSignups: PluginSignup[];
 }
 
 export const createDefaultSchema = (): DatabaseSchema => ({
@@ -44,4 +46,5 @@ export const createDefaultSchema = (): DatabaseSchema => ({
   webhooks: [],
   auditLogs: [],
   claudeMemories: [],
+  pluginSignups: [],
 });

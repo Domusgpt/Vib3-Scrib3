@@ -7,7 +7,7 @@
     {
       "name": "vib3-scribe-rush",
       "source": "../claude-plugin",
-      "description": "Launch-readiness workflows that prime Claude with Vib3 context and style memories using the new memory API and primer endpoint."
+      "description": "Launch-readiness workflows that prime Claude with Vib3 context, style memories, and capture signup intent before unlocking advanced tools."
     }
   ]
 }

@@ -16,6 +16,7 @@ import webhookRoutes from './modules/webhooks/webhook.routes';
 import auditRoutes from './modules/audit/audit.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import memoryRoutes from './modules/memory/memory.routes';
+import claudePluginRoutes from './modules/claude-plugin/plugin.routes';
 
 configurePassport();
 
@@ -41,6 +42,7 @@ export const createApp = () => {
   app.use('/api/audit', isAuthenticated, auditRoutes);
   app.use('/api/analytics', isAuthenticated, analyticsRoutes);
   app.use('/api/memory', isAuthenticated, memoryRoutes);
+  app.use('/api/claude', claudePluginRoutes);
   app.use('/api/billing', billingRoutes);
 
   app.use(express.static(clientBuildPath));

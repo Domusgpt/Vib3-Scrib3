@@ -42,4 +42,4 @@ Steps:
    - A ready-to-use onboarding checklist for teammates syncing the voice to the app and plugin.
    - A confirmation that the memory and deep research context are stored for reuse.
 
-Close by reminding the operator to update the Vib3 Scribe workspace profile via `POST /api/profiles` so future sessions stay in sync with Claude Code's memory and to run `/memory-primer` before the next drafting session.
+Close by reminding the operator to update the Vib3 Scribe workspace profile via `POST /api/profiles` so future sessions stay in sync with Claude Code's memory, to run `/memory-primer` before the next drafting session, and to move into `/account-handoff` if they want long-term access to saved profiles without extra setup.

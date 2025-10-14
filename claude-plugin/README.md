@@ -8,6 +8,7 @@ with the user's writing memory and research context.
 - `/commands/release-pulse.md` – generates stakeholder-ready status summaries.
 - `/commands/style-sync.md` – blends saved profiles with new samples and stores a reusable memory.
 - `/commands/memory-primer.md` – replays saved memories and checks they still match the latest Vib3 profile.
+- `/commands/account-handoff.md` – captures contact info when operators request ongoing access so the team can onboard them.
 - `/agents/launch-navigator.md` – facilitates cross-functional launch planning.
 - `/hooks/hooks.json` – post-install and update nudges to keep the team aligned.
 
@@ -23,6 +24,8 @@ with the user's writing memory and research context.
   and save a `vib3-style-*` memory (including metadata like `profileId`) back through the same API.
 - Run `/memory-primer` before writing to hit `GET /api/memory/primer`, check the stored memories against the live profile, and
   capture a working briefing that you can optionally store as a `briefing` memory.
+- When an operator is ready for persistent access to saved profiles or automation, run `/account-handoff` to log their email and
+  intent via `POST /api/claude/signups` before enabling custom tooling.
 - When shipping updates, run `/release-pulse` to create a status packet that references both memories.
 
 ## Customisation Tips

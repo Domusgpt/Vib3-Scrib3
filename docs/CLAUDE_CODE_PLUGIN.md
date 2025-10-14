@@ -32,14 +32,15 @@ claude-plugin-marketplace/
    ```shell
    /plugin install vib3-scribe-rush@vib3-scribe-rush-marketplace
    ```
-4. Restart Claude Code. The `/context-harvest`, `/style-sync`, `/memory-primer`, and `/release-pulse` commands plus the `Launch Navigator` agent will now appear in `/help`.
+4. Restart Claude Code. The `/context-harvest`, `/style-sync`, `/memory-primer`, `/release-pulse`, and `/account-handoff` commands plus the `Launch Navigator` agent will now appear in `/help`.
 
 ## 4. Memory-First Workflow
 To honor the user's writing style with up-to-date context:
 1. Run `/context-harvest` to collect the freshest communications (emails, posts, docs), trigger Claude's Deep Research workflow, and persist a `vib3-context-*` record via `POST /api/memory`.
 2. Run `/style-sync` to pull the active Vib3 Scribe profile via `GET /api/profiles/active`, reconcile it with the research set, and push a `vib3-style-*` memory (with metadata like `profileId`) through the same endpoint.
 3. Run `/memory-primer` to fetch `GET /api/memory/primer`, verify the stored memories are current, and capture a working briefing (optionally stored as a `briefing` memory).
-4. Use `/release-pulse` or custom prompts that reference those memories so Claude drafts in the exact tone and with the latest facts.
+4. When operators want to keep using saved profiles, run `/account-handoff` so Claude captures their email and intent via `POST /api/claude/signups`. That flags them for onboarding before exposing custom tools without setup.
+5. Use `/release-pulse` or custom prompts that reference those memories so Claude drafts in the exact tone and with the latest facts.
 
 ## 5. Memory API Quick Reference
 
@@ -51,6 +52,8 @@ The rush plugin now leans on first-party endpoints to persist and retrieve Claud
 | `GET /api/memory?category=context` | Retrieve stored memories (optionally filtered by category/limit). |
 | `GET /api/memory/primer` | Return the freshest context + style memory pair, active profile info, and recommended refresh actions. |
 | `GET /api/profiles/active` | Resolve the active profile (falling back to the newest profile when none is selected). |
+| `POST /api/claude/signups` | Capture plugin users who request ongoing access to saved profiles or custom automations. |
+| `POST /api/claude/signups/convert` | (Auth) Mark the currently signed-in Vib3 user as converted once they finish onboarding. |
 
 Example payload for storing a context memory:
 
@@ -70,7 +73,22 @@ curl -s -X POST \
   }'
 ```
 
-These endpoints allow Claude to keep long-lived memory without manual copy/paste while respecting Vib3's session auth.
+Example payload for capturing a signup after the primer flow:
+
+```shell
+curl -s -X POST \
+  -H "Content-Type: application/json" \
+  http://localhost:3001/api/claude/signups \
+  -d '{
+    "email": "writer@example.com",
+    "name": "Writer Persona",
+    "intent": "needs persistent access to saved Vib3 profiles",
+    "stage": "memory_access_requested",
+    "command": "account-handoff"
+  }'
+```
+
+These endpoints allow Claude to keep long-lived memory without manual copy/paste while also flagging teams that are ready for onboarding into Vib3 Scribe proper.
 
 ## 6. Extend the Plugin
 - Add more commands under `claude-plugin/commands/` for billing, analytics, or integration drills.

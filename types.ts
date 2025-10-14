@@ -108,6 +108,25 @@ export interface ClaudeMemory {
   updatedAt: string;
 }
 
+export type PluginSignupStage = 'discovered' | 'memory_access_requested' | 'converted';
+
+export interface PluginSignup {
+  id: string;
+  email: string;
+  name?: string;
+  intent?: string;
+  notes?: string;
+  source: 'claude-code-plugin';
+  stage: PluginSignupStage;
+  usageCount: number;
+  firstCommand?: string;
+  lastCommand?: string;
+  userId?: string;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface License {
   id: string;
   userId: string;

@@ -40,5 +40,6 @@ Use this after `/context-harvest` and `/style-sync` so Claude Code always writes
    ```
    Swap `${jsonBullets}` for a JSON array of your briefing bullets (or `[]`) and keep the same bullets handy in chat for fast copy/paste access.
 6. Remind the operator that any major copy changes should be pushed back to Vib3 Scribe via `POST /api/profiles` so the product and Claude stay aligned.
+7. If they want ongoing access to the saved memories or premium automations, transition to `/account-handoff` so their signup intent is logged before enabling custom tooling.
 
-Finish by acknowledging whether the stored memories are current or if a refresh was scheduled.
+Finish by acknowledging whether the stored memories are current or if a refresh was scheduled, and whether the handoff was captured.
