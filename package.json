@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "install": "npm install --prefix server",
-    "server": "npm run dev --prefix server"
+    "server": "npm run dev --prefix server",
+    "verify": "npm run typecheck && npm run build && npm run build --prefix server"
   },
   "dependencies": {
     "react": "^18.2.0",
