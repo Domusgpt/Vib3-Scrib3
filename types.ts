@@ -87,6 +87,51 @@ export interface StyleProfile {
   createdAt: string;
 }
 
+export type ClaudeMemoryCategory = 'context' | 'style' | 'briefing';
+
+export interface ClaudeMemorySourceArtifact {
+  label: string;
+  url?: string;
+  excerpt?: string;
+}
+
+export interface ClaudeMemory {
+  id: string;
+  userId: string;
+  category: ClaudeMemoryCategory;
+  title: string;
+  summary: string;
+  highlights: string[];
+  sourceArtifacts: ClaudeMemorySourceArtifact[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PluginSignupReason =
+  | 'memory-access'
+  | 'profile-sync'
+  | 'advanced-tools'
+  | 'other';
+
+export interface PluginSignupTouch {
+  reason: PluginSignupReason;
+  command?: string;
+  note?: string;
+  capturedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginSignup {
+  id: string;
+  email: string;
+  source: string;
+  firstCapturedAt: string;
+  lastCapturedAt: string;
+  touches: PluginSignupTouch[];
+  metadata?: Record<string, unknown>;
+}
+
 export interface License {
   id: string;
   userId: string;

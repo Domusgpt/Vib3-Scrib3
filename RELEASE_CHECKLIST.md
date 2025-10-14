@@ -33,7 +33,17 @@ Use one authenticated account and one invited teammate to walk the happy path. F
 
 If any API request fails, capture the server log, stack trace, and repro steps before moving on.
 
-## 4. Release Procedure
+## 4. Claude Plugin Smoke Test
+Confirm the bundled Claude Code plugin can harvest context, sync style, and prime memories without bypassing onboarding controls.
+
+1. **Install fresh** – Start Claude Code in the repo root, run `/plugin marketplace add ./claude-plugin-marketplace`, then `/plugin install vib3-scribe-rush@vib3-scribe-rush-marketplace`. Restart Claude Code to load the commands.
+2. **Enforce signup gating** – Attempt `/context-harvest` without a Vib3 session and confirm the flow halts, logging an entry via `POST /api/plugin-signups` with the operator’s email and `reason`.
+3. **Run the memory loop** – Sign in to Vib3, execute `/context-harvest`, `/style-sync`, and `/memory-primer` in order, and confirm `GET /api/memory/primer` returns the new memories and recommended actions.
+4. **Firebase replication (optional)** – If Firestore credentials or the emulator are configured, check for mirrored documents in `pluginSignups/` and `users/{userId}/claudeMemories` after running the commands.
+
+Document the outcomes (screenshots, CLI output) so marketplace reviewers or internal QA can replay the same steps.
+
+## 5. Release Procedure
 1. Ensure `npm run build` has produced the client assets in `dist/`.
 2. Run `npm run build --prefix server` to emit compiled server output into `server/dist`.
 3. Deploy the contents of `dist/` (client) and `server/dist` (Node service) to the target environment.
@@ -41,7 +51,7 @@ If any API request fails, capture the server log, stack trace, and repro steps b
 5. Verify the deployment by calling `https://<host>/auth/user` (should return the session snapshot or `{ isAuthenticated: false }`) and then smoke test the console via the public URL.
 6. Enable monitoring for the `alerts` module destinations (Slack + PagerDuty) before announcing the release.
 
-## 5. Post-Release Monitoring
+## 6. Post-Release Monitoring
 - Track error rates from the server logger and confirm no auth callback or billing failures are spiking.
 - Watch seat usage and integration sync jobs for the first 24 hours; adjust alert thresholds if they trigger unexpectedly.
 - Collect feedback from the invited teammate to identify any gaps blocking general availability.
