@@ -21,6 +21,17 @@ router.post('/', async (req: Request, res: Response) => {
   res.status(201).json({ message: `Profile ${name} created.`, profile });
 });
 
+router.get('/active', async (req: Request, res: Response) => {
+  const activeProfileId = req.session?.activeProfileId ?? null;
+  const { profile, isFallback } = await profileService.resolveActive(req.user!.id, activeProfileId);
+
+  if (!profile) {
+    return res.status(404).json({ message: 'No style profiles found for this user.' });
+  }
+
+  res.json({ profile, activeProfileId: profile.id, isFallback });
+});
+
 router.post('/active', (req: Request, res: Response) => {
   const { id } = req.body;
   req.session.activeProfileId = id;
