@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import WorkspaceSettings from './pages/WorkspaceSettings';
 import IntegrationsHub from './pages/IntegrationsHub';
 import InsightsCenter from './pages/InsightsCenter';
+import PluginOpsCenter from './pages/PluginOpsCenter';
 import { ConsoleProvider } from './hooks/useConsoleContext';
 
 /**
@@ -26,6 +27,7 @@ const App: React.FC = () => {
                     <Route path="/workspace" element={<WorkspaceSettings />} />
                     <Route path="/integrations" element={<IntegrationsHub />} />
                     <Route path="/insights" element={<InsightsCenter />} />
+                    <Route path="/plugin-ops" element={<PluginOpsCenter />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </ConsoleProvider>

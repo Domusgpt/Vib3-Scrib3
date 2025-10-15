@@ -20,6 +20,7 @@ import {
     ClipboardDocumentIcon,
     LightningBoltIcon,
     ChartBarIcon,
+    SparklesIcon,
 } from './icons';
 import BillingSummary from './billing/BillingSummary';
 import { parseStylePreview } from '../utils/styleParser';
@@ -176,6 +177,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-100">
                         <ChartBarIcon className="h-5 w-5" />
+                    </span>
+                </button>
+                <button
+                    onClick={() => navigate('/plugin-ops')}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/15 px-4 py-3 text-left text-sm text-slate-100 transition hover:bg-indigo-500/25"
+                >
+                    <div>
+                        <p className="text-[11px] uppercase tracking-[0.35em] text-indigo-200/80">Claude plugin</p>
+                        <p className="mt-1 text-xs text-slate-300">Track signups, touches, and gating health.</p>
+                    </div>
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/25 text-indigo-100">
+                        <SparklesIcon className="h-5 w-5" />
                     </span>
                 </button>
             </section>

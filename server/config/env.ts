@@ -20,6 +20,11 @@ const envSchema = z.object({
   BILLING_WEBHOOK_SECRET: z.string().optional(),
   SLACK_WEBHOOK_URL: z.string().url().optional(),
   PAGERDUTY_ROUTING_KEY: z.string().optional(),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  FIREBASE_CREDENTIALS_JSON: z.string().optional(),
+  FIREBASE_EMULATOR_HOST: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

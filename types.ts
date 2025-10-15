@@ -87,6 +87,75 @@ export interface StyleProfile {
   createdAt: string;
 }
 
+export type ClaudeMemoryCategory = 'context' | 'style' | 'briefing';
+
+export interface ClaudeMemorySourceArtifact {
+  label: string;
+  url?: string;
+  excerpt?: string;
+}
+
+export interface ClaudeMemory {
+  id: string;
+  userId: string;
+  category: ClaudeMemoryCategory;
+  title: string;
+  summary: string;
+  highlights: string[];
+  sourceArtifacts: ClaudeMemorySourceArtifact[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PluginSignupReason =
+  | 'memory-access'
+  | 'profile-sync'
+  | 'advanced-tools'
+  | 'other';
+
+export interface PluginSignupTouch {
+  reason: PluginSignupReason;
+  command?: string;
+  note?: string;
+  capturedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type PluginSignupStatus = 'new' | 'contacted' | 'activated' | 'closed';
+
+export interface PluginSignupFollowUp {
+  id: string;
+  handledById: string;
+  handledByEmail?: string;
+  handledByName?: string;
+  handledAt: string;
+  status: PluginSignupStatus;
+  note?: string;
+}
+
+export interface PluginSignup {
+  id: string;
+  email: string;
+  source: string;
+  firstCapturedAt: string;
+  lastCapturedAt: string;
+  touches: PluginSignupTouch[];
+  status: PluginSignupStatus;
+  followUps: PluginSignupFollowUp[];
+  lastFollowedUpAt: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginSignupSummary {
+  total: number;
+  lastCapturedAt: string | null;
+  newInLast7Days: number;
+  multiTouchCount: number;
+  breakdownByReason: Record<PluginSignupReason, number>;
+  breakdownByStatus: Record<PluginSignupStatus, number>;
+}
+
 export interface License {
   id: string;
   userId: string;
