@@ -30,6 +30,7 @@ The backend is modularized into feature domains under `server/modules` with expl
 | `audit` | Immutable audit trail used across administrative modules |
 | `analytics` | Aggregated usage trends, incident feeds, and operational recommendations powering the insights console |
 | `alerts` | Slack and PagerDuty dispatchers for governance limit breaches |
+| `plugin-signups` | Capture Claude plugin signup interest once operators request advanced features |
 
 Supporting layers:
 - `config/` centralizes environment validation (`zod`), session, CORS, and Passport strategy registration.
@@ -37,7 +38,7 @@ Supporting layers:
 - `lib/logger` exposes a minimal structured logger used across modules.
 
 ### 1.3 Database & Data Model
-- Current persistence uses `lowdb` to persist `users`, `style_profiles`, `licenses`, `subscriptions`, `usage`, `billingPlans`, `organizations`, `memberships`, `invitations`, `apiKeys`, `webhooks`, and `auditLogs` in `server/db.json`.
+- Current persistence uses `lowdb` to persist `users`, `style_profiles`, `licenses`, `subscriptions`, `usage`, `billingPlans`, `organizations`, `memberships`, `invitations`, `apiKeys`, `webhooks`, `auditLogs`, `claudeMemories`, and `pluginSignups` in `server/db.json`.
 - `database/seed.ts` injects three default plans (Free, Pro, Enterprise) so monetization is live out of the box and initializes governance collections.
 - Usage records are stored per-user, per-month to enforce limits and power analytics.
 - Every authenticated user receives a personal workspace; teams can spawn additional workspaces with their own seats, API keys, and webhooks.
@@ -70,7 +71,17 @@ FACEBOOK_APP_ID=...
 FACEBOOK_APP_SECRET=...
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 PAGERDUTY_ROUTING_KEY=...
+# Optional: mirror plugin signups + Claude memories to Firebase
+# (set FIREBASE_CREDENTIALS_JSON instead if you prefer a single env var)
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_EMULATOR_HOST=localhost:8080
 ```
+
+If you want to use a single service-account blob, set `FIREBASE_CREDENTIALS_JSON` to the JSON payload exported from Firebase.
+When Firebase settings are present (or when pointing to the emulator), plugin signup events and Claude memories are replicated
+to Firestore so the Claude Code plugin can read progress without relaxing the session security model.
 
 ### 2.4 Run Locally
 ```bash
@@ -115,6 +126,7 @@ All endpoints live under `BASE_URL` and respond with JSON.
 ### 4.2 Profiles
 - `GET /api/profiles` – list user profiles
 - `POST /api/profiles` – create profile (manual override)
+- `GET /api/profiles/active` – resolve the active profile (falls back to the newest profile when none is selected)
 - `POST /api/profiles/active` – set active profile in session
 
 ### 4.3 Chat
@@ -148,6 +160,15 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - `GET /api/audit/:organizationId` – retrieve the latest workspace audit entries
 - `GET /api/audit/:organizationId/export?format=csv` – download audit history (supports optional `since=YYYY-MM-DD`)
 
+### 4.7 Claude Memory
+- `POST /api/memory` – persist context, style, or briefing memories for the signed-in user
+- `GET /api/memory` – list memories (supports `category` + `limit` filters)
+- `GET /api/memory/primer` – retrieve the freshest context/style pair plus refresh guidance
+
+### 4.8 Plugin Growth Capture
+- `GET /api/plugin-signups` – authenticated operators can review captured signup demand with optional filters
+- `POST /api/plugin-signups` – log an email, command, and reason when an operator wants access to advanced Vib3 features from the Claude plugin
+
 ---
 
 ## 5. Frontend Product Notes
@@ -156,6 +177,7 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - **Billing Drawer**: Users always see their current plan, usage bar, seat utilisation, and one-click monetization actions.
 - **Workspace Switcher**: The sidebar lets authenticated users jump between personal and team workspaces, while `/workspace` exposes member management, invite revocation, API key lifecycle controls, webhook testing/deletion, and the live audit log.
 - **Operations Guardrails**: Workspace settings surface override prompts that page the on-call team whenever invite or API key thresholds are exceeded, and audit exports can be pulled directly from the console.
+- **Claude Plugin Operations**: `/plugin-ops` highlights signup momentum, multi-touch accounts, individual touches, and provides owner/status/next-action controls so launch owners can drive every Claude plugin signup to activation before publishing.
 - **Integration Hub**: `/integrations` provides a glassmorphic control center for Gmail, Facebook, and upcoming messaging connectors with live health, sample counts, and one-click sync or disconnect actions.
 - **Insights Console**: `/insights` aggregates message velocity, automation confidence, and audit incidents with proactive recommendations.
 - **Access Policies**: Workspace settings expose single sign-on enforcement with Google/Facebook toggles, live status, and audit-backed history to keep governance transparent.
@@ -171,5 +193,6 @@ All endpoints live under `BASE_URL` and respond with JSON.
 - Wire the webhook delivery queue to a background worker (BullMQ/SQS) for guaranteed delivery semantics.
 - Extend API key scopes to cover upcoming modules (analytics exports, knowledge bases) and surface key rotation reminders or expirations in-product.
 - Add scheduled audit-log archival/retention policies (S3, configurable retention windows) on top of the new CSV export surface.
+- Package shared launch workflows in the bundled Claude Code plugin (`docs/CLAUDE_CODE_PLUGIN.md`), using `/context-harvest`, `/style-sync`, `/memory-primer`, and the `/api/memory` + `/api/memory/primer` endpoints to keep Claude's memory aligned with Vib3 Scribe profiles as release rituals evolve.
 
 Scribe AI now ships with a production-ready architecture, monetization hooks, and a cohesive user experience that can grow into an enterprise-grade writing copilot.

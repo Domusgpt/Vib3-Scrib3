@@ -2,6 +2,8 @@ import {
   ApiKey,
   AuditLog,
   BillingPlan,
+  ClaudeMemory,
+  PluginSignup,
   Invitation,
   License,
   Membership,
@@ -26,6 +28,8 @@ export interface DatabaseSchema {
   apiKeys: ApiKey[];
   webhooks: WebhookSubscription[];
   auditLogs: AuditLog[];
+  claudeMemories: ClaudeMemory[];
+  pluginSignups: PluginSignup[];
 }
 
 export const createDefaultSchema = (): DatabaseSchema => ({
@@ -41,4 +45,6 @@ export const createDefaultSchema = (): DatabaseSchema => ({
   apiKeys: [],
   webhooks: [],
   auditLogs: [],
+  claudeMemories: [],
+  pluginSignups: [],
 });

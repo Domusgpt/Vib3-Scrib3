@@ -87,6 +87,85 @@ export interface StyleProfile {
   createdAt: string;
 }
 
+export type ClaudeMemoryCategory = 'context' | 'style' | 'briefing';
+
+export interface ClaudeMemorySourceArtifact {
+  label: string;
+  url?: string;
+  excerpt?: string;
+}
+
+export interface ClaudeMemory {
+  id: string;
+  userId: string;
+  category: ClaudeMemoryCategory;
+  title: string;
+  summary: string;
+  highlights: string[];
+  sourceArtifacts: ClaudeMemorySourceArtifact[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PluginSignupReason =
+  | 'memory-access'
+  | 'profile-sync'
+  | 'advanced-tools'
+  | 'other';
+
+export interface PluginSignupTouch {
+  reason: PluginSignupReason;
+  command?: string;
+  note?: string;
+  capturedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type PluginSignupStatus =
+  | 'new'
+  | 'awaiting-session'
+  | 'contacted'
+  | 'activated'
+  | 'snoozed'
+  | 'closed';
+
+export interface PluginSignupFollowUp {
+  id: string;
+  authorId?: string;
+  authorName?: string;
+  authorEmail?: string;
+  note: string;
+  status?: PluginSignupStatus;
+  createdAt: string;
+}
+
+export interface PluginSignup {
+  id: string;
+  email: string;
+  source: string;
+  firstCapturedAt: string;
+  lastCapturedAt: string;
+  touches: PluginSignupTouch[];
+  metadata?: Record<string, unknown>;
+  status: PluginSignupStatus;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  nextActionAt?: string | null;
+  followUps: PluginSignupFollowUp[];
+  lastUpdatedAt: string;
+  lastUpdatedBy?: string | null;
+}
+
+export interface PluginSignupSummary {
+  total: number;
+  lastCapturedAt: string | null;
+  newInLast7Days: number;
+  multiTouchCount: number;
+  breakdownByReason: Record<PluginSignupReason, number>;
+}
+
 export interface License {
   id: string;
   userId: string;
