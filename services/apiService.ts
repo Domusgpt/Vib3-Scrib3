@@ -23,6 +23,11 @@ import {
     UsageSnapshot,
     WebhookEvent,
     WebhookSubscription,
+    PluginSignup,
+    PluginSignupSummary,
+    PluginSignupReason,
+    PluginSignupStatus,
+    PluginSignupFollowUp,
 } from '../types';
 
 class ApiError extends Error {
@@ -110,6 +115,16 @@ export const logout = async (): Promise<{ message: string }> => {
 
 export const getProfiles = async (): Promise<StyleProfile[]> => {
     return apiRequest('/api/profiles');
+};
+
+export interface ActiveProfileResponse {
+    profile: StyleProfile;
+    activeProfileId: string;
+    isFallback: boolean;
+}
+
+export const getActiveProfile = async (): Promise<ActiveProfileResponse> => {
+    return apiRequest('/api/profiles/active');
 };
 
 export const setActiveProfile = async (id: string): Promise<{ activeProfileId: string }> => {
@@ -254,6 +269,64 @@ export const getIncidentFeed = async (
     const query = params.toString();
     const response = await apiRequest(`/api/analytics/incidents${query ? `?${query}` : ''}`);
     return response.incidents as IncidentInsight[];
+};
+
+export interface PluginSignupQuery {
+    limit?: number;
+    reason?: PluginSignupReason;
+    since?: string;
+    source?: string;
+}
+
+export interface PluginSignupListResponse {
+    signups: PluginSignup[];
+    summary: PluginSignupSummary;
+    total: number;
+    filteredCount: number;
+}
+
+export const getPluginSignups = async (
+    query: PluginSignupQuery = {},
+): Promise<PluginSignupListResponse> => {
+    const params = new URLSearchParams();
+    if (typeof query.limit === 'number' && Number.isFinite(query.limit)) {
+        params.set('limit', String(Math.max(1, Math.floor(query.limit))));
+    }
+    if (query.reason) {
+        params.set('reason', query.reason);
+    }
+    if (query.since) {
+        params.set('since', query.since);
+    }
+    if (query.source) {
+        params.set('source', query.source);
+    }
+    const search = params.toString();
+    return apiRequest(`/api/plugin-signups${search ? `?${search}` : ''}`);
+};
+
+export interface UpdatePluginSignupPayload {
+    status?: PluginSignupStatus;
+    ownerId?: string | null;
+    ownerName?: string | null;
+    ownerEmail?: string | null;
+    nextActionAt?: string | null;
+    note?: string | null;
+}
+
+export interface UpdatePluginSignupResponse {
+    signup: PluginSignup;
+    followUp?: PluginSignupFollowUp;
+}
+
+export const updatePluginSignup = async (
+    id: string,
+    payload: UpdatePluginSignupPayload,
+): Promise<UpdatePluginSignupResponse> => {
+    return apiRequest(`/api/plugin-signups/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    });
 };
 
 export const getOrganizations = async (): Promise<{
